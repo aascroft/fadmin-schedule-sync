@@ -184,6 +184,9 @@
     padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 10px 0;
     font-size: 12px;
   }
+  .instructions-body a { color: #4361ee; word-break: break-all; }
+  .instructions-body a:hover { color: #3451d1; }
+  .instructions-body p { margin-bottom: 6px; }
 
   @media (max-width: 600px) {
     main { padding: 0 12px 60px; }
@@ -286,91 +289,109 @@
 
         <div class="tab-content active" id="ps-tab">
           <div class="instructions-body">
-            <h3>Part 1 — Export from FAdmin</h3>
+
+            <h3>Part 1 — Export the FAdmin file</h3>
             <ol>
-              <li>Log into FAdmin and navigate to the schedule/flyer runs section.</li>
-              <li>Apply your desired date range filter to capture upcoming flyer runs.</li>
-              <li>Export the full list as a CSV. Do not modify the file before uploading.</li>
+              <li>Go to FAdmin and open the side menu. Select <strong>System</strong>, then select <strong>Custom Actions</strong>.<br><a href="https://fadmin.flippback.com/custom_actions" target="_blank">https://fadmin.flippback.com/custom_actions</a></li>
+              <li>Under <strong>Action Type</strong>, enter <code>Merchandising Campaign Identifier</code>.</li>
+              <li>Set <strong>Start Date</strong> to today's date.</li>
+              <li>Set <strong>End Date</strong> to the end of your desired range. This is typically one year out, or further if the range ends in December.</li>
+              <li>Submit the export request.</li>
+              <li>The file will be sent to the email address associated with your FAdmin account within 15 minutes.</li>
+              <li>If the export does not arrive, submit the request again.</li>
             </ol>
 
-            <h3>Part 2 — Export context file from ClickUp</h3>
+            <h3>Part 2 — Export the context file from ClickUp</h3>
             <ol>
-              <li>Go to the <strong>PS Retailer Hub</strong> list in ClickUp (VSM - Processing Support space).</li>
-              <li>Export the list as a CSV. This file provides per-retailer processing settings (lead, processor, cadence, etc.).</li>
+              <li>Open the <strong>PS Retailer Hub</strong> list in ClickUp:<br><a href="https://app.clickup.com/9003147350/v/l/6-901702655628-1" target="_blank">https://app.clickup.com/9003147350/v/l/6-901702655628-1</a></li>
+              <li>Make sure all statuses are expanded in the view.</li>
+              <li>Click the <strong>settings cog</strong> in the top-right of the list.</li>
+              <li>Select <strong>Export view</strong>.</li>
+              <li>Toggle on <strong>All Columns</strong>.</li>
+              <li>Confirm the format is set to <strong>CSV</strong>.</li>
+              <li>Click <strong>Download</strong>.</li>
             </ol>
 
-            <h3>Part 3 — Export dedupe file from ClickUp</h3>
+            <h3>Part 3 — Export the dedupe file from ClickUp</h3>
+            <p style="margin-bottom:8px;">This file contains all existing PS tasks and is used to avoid creating duplicate entries.</p>
             <ol>
-              <li>Go to the <strong>Processing Support Board</strong> list in ClickUp.</li>
-              <li>Export the full list as a CSV. This file contains all existing PS tasks and is used to avoid creating duplicates.</li>
+              <li>Open the <strong>Processing Support Board</strong> list in ClickUp:<br><a href="https://app.clickup.com/9003147350/v/l/6-901702638190-1" target="_blank">https://app.clickup.com/9003147350/v/l/6-901702638190-1</a></li>
+              <li>Make sure all statuses are expanded in the view.</li>
+              <li>Click the <strong>settings cog</strong> in the top-right of the list.</li>
+              <li>Select <strong>Export view</strong>.</li>
+              <li>Toggle on <strong>All Columns</strong>.</li>
+              <li>Confirm the format is set to <strong>CSV</strong>.</li>
+              <li>Click <strong>Download</strong>.</li>
             </ol>
 
             <h3>Part 4 — Run the tool</h3>
             <ol>
-              <li>Select <strong>Processing Support</strong> above.</li>
-              <li>Upload your three CSV files in the correct upload zones.</li>
+              <li>Select <strong>Processing Support</strong> at the top of this page.</li>
+              <li>Upload each of your three CSV files into the correct upload zones.</li>
               <li>Click <strong>Generate CSV</strong>.</li>
-              <li>Review the status summary (rows processed, rows skipped by dedupe, any warnings).</li>
-              <li>Click <strong>Download Import File</strong> to save the output.</li>
+              <li>Review the status summary — it will show how many rows are ready to import, how many were skipped as duplicates, and any warnings.</li>
+              <li>Click <strong>Download Import File</strong> to save the output to your computer.</li>
             </ol>
 
             <h3>Part 5 — Import into ClickUp</h3>
-            <ol>
-              <li>In ClickUp, navigate to the <strong>Processing Support Board</strong> list.</li>
-              <li>Click the <strong>...</strong> menu → <strong>Import</strong> → <strong>CSV</strong>.</li>
-              <li>Upload the downloaded import file.</li>
-              <li>Map fields if prompted (headers should match automatically).</li>
-              <li>Complete the import.</li>
-            </ol>
-
             <div class="note">
-              <strong>Note:</strong> The dedupe step removes any flyer runs that already exist in the PS Board (matched by Flyer Run URL). This prevents duplicate tasks. Run the dedupe export fresh each time for best results.
+              <strong>Under Construction</strong> — Import instructions for this step are still being finalized and will be added here soon.
             </div>
+
           </div>
         </div>
 
         <div class="tab-content" id="fmq-tab">
           <div class="instructions-body">
-            <h3>Part 1 — Export from FAdmin</h3>
+
+            <h3>Part 1 — Export the FAdmin file</h3>
             <ol>
-              <li>Log into FAdmin and navigate to the schedule/flyer runs section.</li>
-              <li>Apply your desired date range filter to capture upcoming flyer runs.</li>
-              <li>Export the full list as a CSV. Do not modify the file before uploading.</li>
+              <li>Go to FAdmin and open the side menu. Select <strong>System</strong>, then select <strong>Custom Actions</strong>.<br><a href="https://fadmin.flippback.com/custom_actions" target="_blank">https://fadmin.flippback.com/custom_actions</a></li>
+              <li>Under <strong>Action Type</strong>, enter <code>Merchandising Campaign Identifier</code>.</li>
+              <li>Set <strong>Start Date</strong> to today's date.</li>
+              <li>Set <strong>End Date</strong> to the end of your desired range. This is typically one year out, or further if the range ends in December.</li>
+              <li>Submit the export request.</li>
+              <li>The file will be sent to the email address associated with your FAdmin account within 15 minutes.</li>
+              <li>If the export does not arrive, submit the request again.</li>
             </ol>
 
-            <h3>Part 2 — Export context file from ClickUp</h3>
+            <h3>Part 2 — Export the context file from ClickUp</h3>
             <ol>
-              <li>Go to the <strong>Merchant Information Database</strong> list in ClickUp (Flyer Management Queue space).</li>
-              <li>Export the list as a CSV. This file provides per-merchant settings (OneGuide link, time estimate, assets check days, etc.).</li>
+              <li>Open the <strong>Merchant Information Database</strong> list in ClickUp:<br><a href="https://app.clickup.com/9003147350/v/l/6-901707315823-1" target="_blank">https://app.clickup.com/9003147350/v/l/6-901707315823-1</a></li>
+              <li>Make sure all statuses are expanded in the view.</li>
+              <li>Click the <strong>settings cog</strong> in the top-right of the list.</li>
+              <li>Select <strong>Export view</strong>.</li>
+              <li>Toggle on <strong>All Columns</strong>.</li>
+              <li>Confirm the format is set to <strong>CSV</strong>.</li>
+              <li>Click <strong>Download</strong>.</li>
             </ol>
 
-            <h3>Part 3 — Export dedupe file from ClickUp</h3>
+            <h3>Part 3 — Export the dedupe file from ClickUp</h3>
+            <p style="margin-bottom:8px;">This file contains all existing FMQ tasks and is used to avoid creating duplicate entries.</p>
             <ol>
-              <li>Go to the <strong>Flyer Management Queue</strong> list in ClickUp.</li>
-              <li>Export the full list as a CSV. This file contains all existing FMQ tasks and is used to avoid creating duplicates.</li>
+              <li>Open the <strong>Flyer Management Queue</strong> list in ClickUp:<br><a href="https://app.clickup.com/9003147350/v/l/6-901707266997-1" target="_blank">https://app.clickup.com/9003147350/v/l/6-901707266997-1</a></li>
+              <li>Make sure all statuses are expanded in the view.</li>
+              <li>Click the <strong>settings cog</strong> in the top-right of the list.</li>
+              <li>Select <strong>Export view</strong>.</li>
+              <li>Toggle on <strong>All Columns</strong>.</li>
+              <li>Confirm the format is set to <strong>CSV</strong>.</li>
+              <li>Click <strong>Download</strong>.</li>
             </ol>
 
             <h3>Part 4 — Run the tool</h3>
             <ol>
-              <li>Select <strong>Flyer Management Queue</strong> above.</li>
-              <li>Upload your three CSV files in the correct upload zones.</li>
+              <li>Select <strong>Flyer Management Queue</strong> at the top of this page.</li>
+              <li>Upload each of your three CSV files into the correct upload zones.</li>
               <li>Click <strong>Generate CSV</strong>.</li>
-              <li>Review the status summary (rows processed, rows skipped by dedupe, any warnings).</li>
-              <li>Click <strong>Download Import File</strong> to save the output.</li>
+              <li>Review the status summary — it will show how many rows are ready to import, how many were skipped as duplicates, and any warnings.</li>
+              <li>Click <strong>Download Import File</strong> to save the output to your computer.</li>
             </ol>
 
             <h3>Part 5 — Import into ClickUp</h3>
-            <ol>
-              <li>In ClickUp, navigate to the <strong>Flyer Management Queue</strong> list.</li>
-              <li>Click the <strong>...</strong> menu → <strong>Import</strong> → <strong>CSV</strong>.</li>
-              <li>Upload the downloaded import file.</li>
-              <li>Map fields if prompted (headers should match automatically).</li>
-              <li>Complete the import.</li>
-            </ol>
-
             <div class="note">
-              <strong>Note:</strong> Each row in the FMQ output represents one flyer run. The task name is automatically formatted as a date range (e.g., "Merchant - January 15 to 28, 2026"). The dedupe step removes runs already in the queue.
+              <strong>Under Construction</strong> — Import instructions for this step are still being finalized and will be added here soon.
             </div>
+
           </div>
         </div>
       </div>
