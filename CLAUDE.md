@@ -2,11 +2,104 @@
 
 ## What This Is
 
-A browser-based tool that converts FAdmin schedule exports (CSV) into ClickUp-ready import files (CSV). The entire transformation runs client-side — no server, no data ever leaves the user's browser.
+A browser-based tool that converts FAdmin schedule exports (CSV) into ClickUp-ready import files (CSV). Entirely client-side — no server, no data leaves the user's browser.
 
 **Live URL:** https://aascroft.github.io/fadmin-schedule-sync
 **Repo:** https://github.com/aascroft/fadmin-schedule-sync
 **Slack channel:** #fadmin-schedule-sync
+
+---
+
+## For Feedback Triage Sessions — Start Here
+
+The tool is in V1 team testing. The team submits feedback via a Google Sheet — one row per issue, with: process (PS / FMQ / Both), issue type, affected column, retailer / merchant, Flyer Run URL, what the tool generated, what it should have generated, source of truth, scope, notes.
+
+**Two fields drive the fix path:**
+
+- **Source of truth** — if it's "ClickUp context export" and the value reported as wrong actually IS that value in ClickUp, the bug is **data-side** (fix in ClickUp). If the source is correct but the tool output is wrong, the bug is **code-side**.
+- **Scope** — "one cell" or "one retailer" → almost always data-side. "Whole column" / "every row" → almost always code-side.
+
+**Before changing any code:**
+1. Read **Things That Look Like Bugs But Aren't** below to filter false positives
+2. Use the **Feedback Triage Guide** to map symptom → likely cause → code area
+3. Use the **Code Reference Map** to find the exact line(s) to read
+
+**After any code change:** push to `main`. The user re-tests with their real FAdmin + ClickUp exports. That re-test IS the verification — there are no example files and no automated test suite in the repo.
+
+---
+
+## Code Reference Map
+
+Line numbers in `index.html` (887 lines, single-file app):
+
+| Concept | Function / Block | Lines |
+|---|---|---|
+| State & mode tracking | `state`, `selectMode` | 404-433 |
+| File upload + `.csv` extension check | `setFile` | 453-473 |
+| Column existence validation | `validateColumns` | 481-486 |
+| FAdmin date parsing (MM/DD/YYYY) | `parseFAdminDate` | 500-507 |
+| Date math + normalize to M/D/YYYY | `addDays`, `normDate` | 508-520 |
+| FMQ task-name date-range formatter (3 cases) | `formatFMQTaskName` | 525-550 |
+| Dedupe Set construction | `buildDedupeSet` | 552-560 |
+| PS context map (join: Flyer Type ID) | `buildContextMapPS` | 562-569 |
+| FMQ context map (filters Task Type = "Task") | `buildContextMapFMQ` | 571-581 |
+| **PS output headers (19 cols, fixed order)** | `PS_HEADERS` constant | 583-603 |
+| PS transform main loop | `transformPS` | 605-662 |
+| **PS row construction (output object)** | inside `transformPS` | 638-657 |
+| **FMQ output headers (14 cols, fixed order)** | `FMQ_HEADERS` constant | 664-679 |
+| FMQ transform main loop | `transformFMQ` | 681-734 |
+| **FMQ row construction (output object)** | inside `transformFMQ` | 711-731 |
+| CSV unparse + download trigger | `downloadCSV` | 736-743 |
+| Validation + transform orchestration | `runTransform` | 750-848 |
+| User-facing status / error display | `showStatus` | 851-868 |
+
+**Critical footgun:** the `*_HEADERS` constant and the row-construction object inside the transform are **separate blocks**. Adding, removing, or renaming a column requires editing **both**. If only one changes, output gets a missing column or a mismatched header. The two blocks are 35-50 lines apart for each mode.
+
+---
+
+## Feedback Triage Guide
+
+| Feedback symptom | Most likely cause | Investigate |
+|---|---|---|
+| One cell blank for one retailer | ClickUp context row has it blank (data-side) | Open the actual ClickUp context export, find that retailer's row, check the column. If blank in source → data fix in ClickUp; if populated in source → code bug. |
+| Whole column blank in every row | Code reads a column name that doesn't exist | Find column in `PS_HEADERS` / `FMQ_HEADERS`, find its row-construction line, verify the source column name string matches the ClickUp export header exactly (incl. trailing " (short text)" / " (drop down)" / parentheses / casing) |
+| One cell wrong for one retailer | Same as blank-for-one — data-side most likely | Same investigation |
+| Whole column wrong in every row | Wrong source column referenced in row construction | Same as whole-column-blank |
+| Wrong date in any date field | Date formula incorrect, or Live Date wrong upstream | Date math at lines 508-520; cross-check formulas against "Date Calculation Logic" section |
+| Wrong FMQ task-name format | One of the 3 branches in `formatFMQTaskName` chose incorrectly | Lines 525-550. Check live + end date months/years against the rules table |
+| Missing rows (expected but not in output) | Failed context lookup OR was deduped | Check the join key exists in context file (PS: Flyer Type ID; FMQ: Merchant ID + Flyer Type ID, **Task Type = "Task" only**). Check the constructed Flyer Run URL is not in the dedupe file. |
+| Extra rows (should have been excluded) | Dedupe URL didn't match exactly | Compare `https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}` against dedupe file's `Flyer Run (url)` column character-for-character |
+| Duplicate rows in output | FMQ context has duplicate Task-type rows for same Merchant + Flyer Type | Check FMQ context file for accidental duplicates |
+| Wrong column order in output | `PS_HEADERS` / `FMQ_HEADERS` array was reordered | NEVER reorder these arrays — ClickUp expects exact order |
+| Encoding / character issues (accents, em-dashes) | PapaParse unparse charset / quoting | `downloadCSV` lines 736-743; may need explicit BOM or quote settings |
+
+---
+
+## Things That Look Like Bugs But Aren't
+
+Filter these out before reaching for a fix.
+
+1. **`Coordinator (drop down)` → `Processor (drop down)`** is intentional. The PS context file has "Coordinator (drop down)"; the output column is "Processor (drop down)". They're the same field with different names. Don't "fix" the mapping.
+2. **`End date` with lowercase 'd'** is intentional. FAdmin's column header literally has lowercase d. Don't change to "End Date".
+3. **`Valid Date` differs from `Live Date`** is expected. They're different columns in FAdmin and can have different values for the same row. Don't combine or substitute.
+4. **Output dates have no leading zeros** (`4/3/2026`, not `04/03/2026`). Intentional — this is what ClickUp accepts. Don't reformat.
+5. **Rows that fail context lookup are skipped.** The "noContext" warning count is informational — many FAdmin rows are for retailers in the OTHER workflow, that's expected.
+6. **`PS_HEADERS` / `FMQ_HEADERS` arrays and the row-construction objects are separate blocks.** Both must be edited together when changing columns.
+7. **FMQ filters `Task Type = "Task"` only.** Subtasks and section rows are excluded by design. If FMQ output is missing a merchant, this filter is the first thing to check (the merchant might exist in the context file as a subtask row).
+
+---
+
+## Verifying Changes
+
+No example files exist in the repo. The verification path:
+
+1. **Trace the change mentally first.** Find the line(s) being changed. Read surrounding logic. Does it touch only the symptom column, or a shared path (e.g., date math used by every row)?
+2. **Consider blast radius.**
+   - PS uses one context row per `Flyer Type ID` — a code change at a row-construction line affects every retailer using that flyer type.
+   - FMQ uses one context row per `Merchant ID + Flyer Type ID` — narrower scope.
+   - Always ask: "could this fix break things for retailer Y while fixing retailer X?"
+3. **For data-side issues, do not change code.** Push back: "ClickUp's context export shows value X for retailer Y. If that's wrong, fix it in ClickUp. The code is reading correctly."
+4. **Push the fix to `main`.** The user re-runs the tool with their real exports and verifies the specific cells/rows from feedback. The user's re-test is the verification.
 
 ---
 
@@ -59,15 +152,13 @@ The user selects a mode, uploads three CSV files, clicks Generate, and downloads
 | Context File | PS Retailer Hub (ClickUp) | Merchant Information Database (ClickUp) |
 | Dedupe File | Processing Support Board (ClickUp) | Flyer Management Queue (ClickUp) |
 
-**Dedupe logic:** The tool constructs a Flyer Run URL for each FAdmin row (`https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}`). If that URL already exists in the `Flyer Run (url)` column of the dedupe export, the row is skipped. This prevents creating duplicate ClickUp tasks.
+**Dedupe logic:** The tool constructs a Flyer Run URL for each FAdmin row (`https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}`). If that URL already exists in the `Flyer Run (url)` column of the dedupe export, the row is skipped.
 
-**Output:** One import-ready CSV per run. Column headers and column order must exactly match the authoritative examples (documented below).
+**Output:** One import-ready CSV per run. Column headers and column order must exactly match the authoritative formats (documented below).
 
 ---
 
 ## FAdmin Export — Columns Used
-
-The FAdmin export contains many columns. Only these are used by the tool:
 
 | Column Name | Purpose |
 |---|---|
@@ -97,7 +188,7 @@ Both context files have `Assets Check Days (short text)` and `Preview Days (shor
 | Live/Preview Date (FMQ) | FAdmin `Live Date` column — passthrough only |
 | End Date (FMQ) | FAdmin `End date` column — passthrough only |
 
-**Verified example:** Fresh Thyme Market — Preview Days=1, Live Date=Feb 3 → Preview Date=Feb 2, Due Date=Feb 1 ✓
+**Verified example:** Fresh Thyme Market — Preview Days=1, Live Date=Feb 3 → Preview Date=Feb 2, Due Date=Feb 1.
 
 ---
 
@@ -106,7 +197,7 @@ Both context files have `Assets Check Days (short text)` and `Preview Days (shor
 ### Join Key
 FAdmin `Flyer Type ID` → PS Context `Flyer Type ID (short text)`
 
-One context row per Flyer Type. If no match is found, the FAdmin row is skipped (expected for retailers that belong to other workflows).
+One context row per Flyer Type. If no match is found, the FAdmin row is skipped (expected for retailers in other workflows).
 
 ### Task Name
 `{Merchant Name} - {Flyer Run Name}`
@@ -205,44 +296,17 @@ The tool validates all three uploaded files before running the transform. Each f
 
 ## Schema Assumptions and Known Limitations
 
-These assumptions were confirmed by reverse-engineering the example files. If any of these change, the tool will need to be updated.
+These assumptions were confirmed by reverse-engineering the original FAdmin and ClickUp exports during V1 build. If any of these change in the upstream systems, the tool will need to be updated.
 
 1. **FAdmin column names are stable.** The tool reads columns by name. Any rename in the FAdmin export format will break the affected transformation silently or cause a validation error.
-
-2. **ClickUp column names are stable.** The context and dedupe files are read by column name. ClickUp occasionally changes export column names. The validation checks will catch changes to critical join-key columns; non-critical column renames will cause silent blank values in the output.
-
-3. **ClickUp export must use "All Columns."** Exports without All Columns enabled will be missing the required join-key columns and will fail validation.
-
-4. **FMQ context: Task-type rows only.** The FMQ Merchant Information Database export contains rows of multiple types (Task, subtask, section). Only rows where `Task Type` = `Task` are used. If ClickUp changes the Task Type values, the lookup map will be empty.
-
-5. **FAdmin date format is MM/DD/YYYY.** The tool parses dates by splitting on `/` and assuming month/day/year order. If the FAdmin export format changes, all date calculations will break.
-
-6. **PS Processor source field.** In the PS context export, the field is named `Coordinator (drop down)`. The output column is `Processor (drop down)`. These are the same field. If ClickUp renames `Coordinator (drop down)`, the Processor column in the PS output will be blank.
-
-7. **Valid Date can differ from Live Date.** In PS output, `Valid Date` is a direct passthrough from FAdmin col `Valid Date` — it is not the same as Live Date. Do not substitute one for the other.
-
-8. **FAdmin `End date` has a lowercase 'd'.** The column header is `End date`, not `End Date`. The tool reads it exactly as-is.
-
-9. **Output column order is fixed.** ClickUp's CSV import maps columns by header name, but the order in the file should match the authoritative examples to avoid any import field-mapping issues.
-
----
-
-## Example Files — Reference Only
-
-The following files were used to reverse-engineer all transformation logic. They are **not needed at runtime** — the app is entirely client-side and does not reference these files.
-
-| File | What it was used for |
-|---|---|
-| `example - FAdmin RAW Export.csv` | Confirmed FAdmin column names, date formats, and data structure |
-| `example - ClickUp - PS - Context - PS Retailer Hub.csv` | Confirmed PS join key, confirmed all context column names |
-| `example - ClickUp - FMQ - Context - Merchant Information Database.csv` | Confirmed FMQ join key, Task Type filter, context column names |
-| `example - ClickUp - PS - Dedupe Tasks.csv` | Confirmed dedupe column name (`Flyer Run (url)`) for PS |
-| `example- ClickUp - FMQ - Dedupe Tasks.csv` | Confirmed dedupe column name for FMQ |
-| `example - PS - Import Ready.csv` | Authoritative PS output format — 19 columns, exact order, exact headers |
-| `example - FMQ - Import Ready.csv` | Authoritative FMQ output format — 14 columns, exact order, exact headers |
-| `Processing Support Scheduling Import Tool Sheet.xlsx` | Legacy Google Sheets tool — used to verify join key (Flyer Type ID), date formulas, and PS Task Name format |
-
-**It is safe to delete these files from the repo root.** All schema, column mapping, transformation logic, and format decisions derived from them are documented in this file. If you ever need to re-verify the logic against raw data, you would need to re-export fresh examples from FAdmin and ClickUp at that time (the original examples may be from a different date range than current live data).
+2. **ClickUp column names are stable.** Context and dedupe files are read by column name. Validation catches changes to critical join-key columns; non-critical column renames cause silent blank values in the output.
+3. **ClickUp export must use "All Columns."** Exports without this enabled will fail validation.
+4. **FMQ context: Task-type rows only.** The Merchant Information Database export contains rows of multiple types (Task, subtask, section). Only `Task` rows are used.
+5. **FAdmin date format is MM/DD/YYYY.** The tool parses by splitting on `/` and assuming month/day/year order. Format change → all date calculations break.
+6. **PS Processor source field:** PS context has `Coordinator (drop down)`; output column is `Processor (drop down)`. Same field, different names.
+7. **Valid Date can differ from Live Date.** PS output `Valid Date` is a passthrough from FAdmin `Valid Date` — not the same as Live Date.
+8. **FAdmin `End date` has a lowercase 'd'.** Read exactly as-is.
+9. **Output column order is fixed.** ClickUp's CSV import maps by header name, but the file order should match the authoritative format to avoid mapping issues.
 
 ---
 
@@ -253,7 +317,7 @@ git clone https://github.com/aascroft/fadmin-schedule-sync
 cd fadmin-schedule-sync
 
 # Edit index.html directly
-# Test by opening index.html in a browser (no server needed)
+# Test locally by opening index.html in a browser (no server needed)
 
 # Deploy
 git add index.html
