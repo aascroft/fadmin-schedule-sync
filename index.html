@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FAdmin → ClickUp Import Tool</title>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f7f8fa;
+    color: #1a1a2e;
+    min-height: 100vh;
+  }
+
+  header {
+    background: #fff;
+    border-bottom: 1px solid #e2e6ea;
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  header h1 { font-size: 18px; font-weight: 700; color: #1a1a2e; }
+  header span { font-size: 13px; color: #6c757d; }
+
+  main {
+    max-width: 860px;
+    margin: 40px auto;
+    padding: 0 24px 80px;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e2e6ea;
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #6c757d;
+    margin-bottom: 10px;
+  }
+
+  /* Mode selector */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .mode-btn {
+    border: 2px solid #e2e6ea;
+    border-radius: 10px;
+    padding: 16px 20px;
+    cursor: pointer;
+    background: #fff;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .mode-btn:hover { border-color: #4361ee; }
+  .mode-btn.selected {
+    border-color: #4361ee;
+    background: #f0f3ff;
+  }
+  .mode-btn .mode-name { font-weight: 700; font-size: 15px; color: #1a1a2e; }
+  .mode-btn .mode-desc { font-size: 12px; color: #6c757d; margin-top: 4px; }
+
+  /* Upload zones */
+  .uploads { display: flex; flex-direction: column; gap: 14px; }
+  .upload-row { display: flex; flex-direction: column; gap: 6px; }
+  .upload-label { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+  .upload-hint { font-size: 12px; color: #6c757d; margin-bottom: 4px; }
+  .drop-zone {
+    border: 2px dashed #c8d0dc;
+    border-radius: 8px;
+    padding: 18px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: #4361ee; background: #f0f3ff; }
+  .drop-zone.has-file { border-color: #2dc653; background: #f0fdf4; border-style: solid; }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .drop-zone .dz-icon { font-size: 20px; margin-bottom: 4px; }
+  .drop-zone .dz-text { font-size: 13px; color: #6c757d; }
+  .drop-zone .dz-filename { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+
+  /* Process button */
+  .process-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .btn-process {
+    background: #4361ee;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 13px 28px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-process:hover:not(:disabled) { background: #3451d1; }
+  .btn-process:disabled { background: #b0bec5; cursor: not-allowed; }
+
+  .btn-download {
+    background: #2dc653;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 13px 28px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: none;
+  }
+  .btn-download:hover { background: #22a846; }
+  .btn-download.visible { display: inline-block; }
+
+  /* Status area */
+  .status-area { display: none; }
+  .status-area.visible { display: block; }
+  .status-box {
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .status-box.success { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+  .status-box.error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+  .status-box.warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .status-title { font-weight: 700; margin-bottom: 4px; }
+  .status-detail { margin-top: 6px; }
+  .warn-list { margin-top: 8px; padding-left: 16px; }
+  .warn-list li { margin-bottom: 3px; }
+
+  /* Instructions */
+  details { margin-top: 8px; }
+  summary {
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4361ee;
+    user-select: none;
+    padding: 4px 0;
+  }
+  summary:hover { color: #3451d1; }
+  .instructions-tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e6ea; margin: 16px 0 18px; }
+  .tab-btn {
+    background: none;
+    border: none;
+    padding: 9px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6c757d;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: color 0.1s;
+  }
+  .tab-btn.active { color: #4361ee; border-bottom-color: #4361ee; }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+  .instructions-body { font-size: 13px; line-height: 1.75; color: #374151; }
+  .instructions-body h3 { font-size: 14px; font-weight: 700; color: #1a1a2e; margin: 16px 0 8px; }
+  .instructions-body h3:first-child { margin-top: 0; }
+  .instructions-body ol, .instructions-body ul { padding-left: 18px; margin: 6px 0 12px; }
+  .instructions-body li { margin-bottom: 5px; }
+  .instructions-body code {
+    background: #f3f4f6; border-radius: 4px; padding: 1px 6px;
+    font-size: 12px; font-family: 'SF Mono', monospace;
+  }
+  .instructions-body .note {
+    background: #f0f3ff; border-left: 3px solid #4361ee;
+    padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 10px 0;
+    font-size: 12px;
+  }
+
+  @media (max-width: 600px) {
+    main { padding: 0 12px 60px; }
+    .card { padding: 20px 16px; }
+    .mode-grid { grid-template-columns: 1fr; }
+    header { padding: 16px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>FAdmin → ClickUp Import Tool</h1>
+    <span>Convert FAdmin schedule exports into ClickUp-ready import files</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Step 1: Mode -->
+  <div class="card">
+    <div class="section-label">Step 1 — Select import type</div>
+    <div class="mode-grid">
+      <button class="mode-btn" id="mode-ps" onclick="selectMode('ps')">
+        <div class="mode-name">Processing Support</div>
+        <div class="mode-desc">Import into the PS Board workflow</div>
+      </button>
+      <button class="mode-btn" id="mode-fmq" onclick="selectMode('fmq')">
+        <div class="mode-name">Flyer Management Queue</div>
+        <div class="mode-desc">Import into the FMQ workflow</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- Step 2: Uploads -->
+  <div class="card">
+    <div class="section-label">Step 2 — Upload files</div>
+    <div class="uploads">
+
+      <div class="upload-row">
+        <div class="upload-label">FAdmin RAW Export</div>
+        <div class="upload-hint">Export from FAdmin — required for both import types</div>
+        <div class="drop-zone" id="dz-fadmin" ondragover="dzDragOver(event,'fadmin')" ondragleave="dzDragLeave(event,'fadmin')" ondrop="dzDrop(event,'fadmin')">
+          <input type="file" accept=".csv" onchange="fileSelected('fadmin', this)">
+          <div class="dz-icon">📂</div>
+          <div class="dz-text" id="dz-fadmin-text">Drop CSV here or click to browse</div>
+        </div>
+      </div>
+
+      <div class="upload-row">
+        <div class="upload-label">Context File — <span id="context-label">Select an import type above</span></div>
+        <div class="upload-hint" id="context-hint">Contains retailer-level metadata from ClickUp</div>
+        <div class="drop-zone" id="dz-context" ondragover="dzDragOver(event,'context')" ondragleave="dzDragLeave(event,'context')" ondrop="dzDrop(event,'context')">
+          <input type="file" accept=".csv" onchange="fileSelected('context', this)">
+          <div class="dz-icon">📂</div>
+          <div class="dz-text" id="dz-context-text">Drop CSV here or click to browse</div>
+        </div>
+      </div>
+
+      <div class="upload-row">
+        <div class="upload-label">Dedupe File — <span id="dedupe-label">Select an import type above</span></div>
+        <div class="upload-hint" id="dedupe-hint">Contains existing ClickUp tasks — used to skip already-imported flyer runs</div>
+        <div class="drop-zone" id="dz-dedupe" ondragover="dzDragOver(event,'dedupe')" ondragleave="dzDragLeave(event,'dedupe')" ondrop="dzDrop(event,'dedupe')">
+          <input type="file" accept=".csv" onchange="fileSelected('dedupe', this)">
+          <div class="dz-icon">📂</div>
+          <div class="dz-text" id="dz-dedupe-text">Drop CSV here or click to browse</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Step 3: Process + Download -->
+  <div class="card">
+    <div class="section-label">Step 3 — Generate import file</div>
+    <div class="process-wrap">
+      <button class="btn-process" id="btn-process" onclick="runTransform()" disabled>
+        Generate CSV
+      </button>
+      <button class="btn-download" id="btn-download" onclick="triggerDownload()">
+        Download Import File
+      </button>
+    </div>
+    <div class="status-area" id="status-area" style="margin-top:16px;">
+      <div class="status-box" id="status-box"></div>
+    </div>
+  </div>
+
+  <!-- Instructions -->
+  <div class="card">
+    <div class="section-label">How to use this tool</div>
+    <details id="instructions-details">
+      <summary>Show step-by-step instructions</summary>
+      <div style="margin-top:16px;">
+        <div class="instructions-tabs">
+          <button class="tab-btn active" onclick="switchTab('ps-tab')">Processing Support</button>
+          <button class="tab-btn" onclick="switchTab('fmq-tab')">Flyer Management Queue</button>
+        </div>
+
+        <div class="tab-content active" id="ps-tab">
+          <div class="instructions-body">
+            <h3>Part 1 — Export from FAdmin</h3>
+            <ol>
+              <li>Log into FAdmin and navigate to the schedule/flyer runs section.</li>
+              <li>Apply your desired date range filter to capture upcoming flyer runs.</li>
+              <li>Export the full list as a CSV. Do not modify the file before uploading.</li>
+            </ol>
+
+            <h3>Part 2 — Export context file from ClickUp</h3>
+            <ol>
+              <li>Go to the <strong>PS Retailer Hub</strong> list in ClickUp (VSM - Processing Support space).</li>
+              <li>Export the list as a CSV. This file provides per-retailer processing settings (lead, processor, cadence, etc.).</li>
+            </ol>
+
+            <h3>Part 3 — Export dedupe file from ClickUp</h3>
+            <ol>
+              <li>Go to the <strong>Processing Support Board</strong> list in ClickUp.</li>
+              <li>Export the full list as a CSV. This file contains all existing PS tasks and is used to avoid creating duplicates.</li>
+            </ol>
+
+            <h3>Part 4 — Run the tool</h3>
+            <ol>
+              <li>Select <strong>Processing Support</strong> above.</li>
+              <li>Upload your three CSV files in the correct upload zones.</li>
+              <li>Click <strong>Generate CSV</strong>.</li>
+              <li>Review the status summary (rows processed, rows skipped by dedupe, any warnings).</li>
+              <li>Click <strong>Download Import File</strong> to save the output.</li>
+            </ol>
+
+            <h3>Part 5 — Import into ClickUp</h3>
+            <ol>
+              <li>In ClickUp, navigate to the <strong>Processing Support Board</strong> list.</li>
+              <li>Click the <strong>...</strong> menu → <strong>Import</strong> → <strong>CSV</strong>.</li>
+              <li>Upload the downloaded import file.</li>
+              <li>Map fields if prompted (headers should match automatically).</li>
+              <li>Complete the import.</li>
+            </ol>
+
+            <div class="note">
+              <strong>Note:</strong> The dedupe step removes any flyer runs that already exist in the PS Board (matched by Flyer Run URL). This prevents duplicate tasks. Run the dedupe export fresh each time for best results.
+            </div>
+          </div>
+        </div>
+
+        <div class="tab-content" id="fmq-tab">
+          <div class="instructions-body">
+            <h3>Part 1 — Export from FAdmin</h3>
+            <ol>
+              <li>Log into FAdmin and navigate to the schedule/flyer runs section.</li>
+              <li>Apply your desired date range filter to capture upcoming flyer runs.</li>
+              <li>Export the full list as a CSV. Do not modify the file before uploading.</li>
+            </ol>
+
+            <h3>Part 2 — Export context file from ClickUp</h3>
+            <ol>
+              <li>Go to the <strong>Merchant Information Database</strong> list in ClickUp (Flyer Management Queue space).</li>
+              <li>Export the list as a CSV. This file provides per-merchant settings (OneGuide link, time estimate, assets check days, etc.).</li>
+            </ol>
+
+            <h3>Part 3 — Export dedupe file from ClickUp</h3>
+            <ol>
+              <li>Go to the <strong>Flyer Management Queue</strong> list in ClickUp.</li>
+              <li>Export the full list as a CSV. This file contains all existing FMQ tasks and is used to avoid creating duplicates.</li>
+            </ol>
+
+            <h3>Part 4 — Run the tool</h3>
+            <ol>
+              <li>Select <strong>Flyer Management Queue</strong> above.</li>
+              <li>Upload your three CSV files in the correct upload zones.</li>
+              <li>Click <strong>Generate CSV</strong>.</li>
+              <li>Review the status summary (rows processed, rows skipped by dedupe, any warnings).</li>
+              <li>Click <strong>Download Import File</strong> to save the output.</li>
+            </ol>
+
+            <h3>Part 5 — Import into ClickUp</h3>
+            <ol>
+              <li>In ClickUp, navigate to the <strong>Flyer Management Queue</strong> list.</li>
+              <li>Click the <strong>...</strong> menu → <strong>Import</strong> → <strong>CSV</strong>.</li>
+              <li>Upload the downloaded import file.</li>
+              <li>Map fields if prompted (headers should match automatically).</li>
+              <li>Complete the import.</li>
+            </ol>
+
+            <div class="note">
+              <strong>Note:</strong> Each row in the FMQ output represents one flyer run. The task name is automatically formatted as a date range (e.g., "Merchant - January 15 to 28, 2026"). The dedupe step removes runs already in the queue.
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+
+</main>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+const state = {
+  mode: null,           // 'ps' | 'fmq'
+  files: { fadmin: null, context: null, dedupe: null },
+  parsedFiles: { fadmin: null, context: null, dedupe: null },
+  outputRows: null,
+  outputHeaders: null,
+  outputFilename: null,
+};
+
+// ─── Mode selector ────────────────────────────────────────────────────────────
+function selectMode(mode) {
+  state.mode = mode;
+  document.getElementById('mode-ps').classList.toggle('selected', mode === 'ps');
+  document.getElementById('mode-fmq').classList.toggle('selected', mode === 'fmq');
+
+  if (mode === 'ps') {
+    document.getElementById('context-label').textContent = 'PS Retailer Hub';
+    document.getElementById('context-hint').textContent = 'ClickUp export from the PS Retailer Hub list — provides per-flyer-type processing settings';
+    document.getElementById('dedupe-label').textContent = 'PS Board Tasks';
+    document.getElementById('dedupe-hint').textContent = 'ClickUp export from the Processing Support Board — used to skip already-imported flyer runs';
+  } else {
+    document.getElementById('context-label').textContent = 'Merchant Information Database';
+    document.getElementById('context-hint').textContent = 'ClickUp export from the Merchant Information Database — provides per-merchant settings';
+    document.getElementById('dedupe-label').textContent = 'FMQ Tasks';
+    document.getElementById('dedupe-hint').textContent = 'ClickUp export from the Flyer Management Queue — used to skip already-imported flyer runs';
+  }
+  updateProcessButton();
+}
+
+// ─── Drag-and-drop / file upload ─────────────────────────────────────────────
+function dzDragOver(e, key) {
+  e.preventDefault();
+  document.getElementById('dz-' + key).classList.add('drag-over');
+}
+function dzDragLeave(e, key) {
+  document.getElementById('dz-' + key).classList.remove('drag-over');
+}
+function dzDrop(e, key) {
+  e.preventDefault();
+  const dz = document.getElementById('dz-' + key);
+  dz.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) setFile(key, file);
+}
+function fileSelected(key, input) {
+  if (input.files[0]) setFile(key, input.files[0]);
+}
+
+function setFile(key, file) {
+  state.files[key] = file;
+  state.parsedFiles[key] = null;
+  const dz = document.getElementById('dz-' + key);
+  const textEl = document.getElementById('dz-' + key + '-text');
+  dz.classList.add('has-file');
+  textEl.innerHTML = '<span class="dz-filename">✓ ' + escHtml(file.name) + '</span>';
+  // Reset output when files change
+  state.outputRows = null;
+  document.getElementById('btn-download').classList.remove('visible');
+  document.getElementById('status-area').classList.remove('visible');
+  updateProcessButton();
+}
+
+function updateProcessButton() {
+  const ready = state.mode && state.files.fadmin && state.files.context && state.files.dedupe;
+  document.getElementById('btn-process').disabled = !ready;
+}
+
+// ─── CSV parsing ──────────────────────────────────────────────────────────────
+function parseCSV(file) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: r => resolve(r.data),
+      error: e => reject(e),
+    });
+  });
+}
+
+// ─── Date helpers ─────────────────────────────────────────────────────────────
+function parseFAdminDate(str) {
+  // FAdmin dates: MM/DD/YYYY
+  if (!str || !str.trim()) return null;
+  const parts = str.trim().split('/');
+  if (parts.length !== 3) return null;
+  return new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+}
+
+function addDays(dateStr, n) {
+  const d = parseFAdminDate(dateStr);
+  if (!d) return '';
+  d.setDate(d.getDate() + n);
+  return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+}
+
+// Normalize MM/DD/YYYY (with possible leading zeros) → M/D/YYYY
+function normDate(dateStr) {
+  const d = parseFAdminDate(dateStr);
+  if (!d) return dateStr || '';
+  return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
+}
+
+const FULL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function formatFMQTaskName(merchantName, liveDateStr, endDateStr) {
+  const live = parseFAdminDate(liveDateStr);
+  const end = parseFAdminDate(endDateStr);
+  if (!live || !end) return merchantName;
+
+  const liveDay = live.getDate();
+  const endDay = end.getDate();
+  const liveMon = live.getMonth();
+  const endMon = end.getMonth();
+  const liveYear = live.getFullYear();
+  const endYear = end.getFullYear();
+
+  let datePart;
+  if (liveYear !== endYear) {
+    // Cross-year: abbreviated months
+    datePart = SHORT_MONTHS[liveMon] + ' ' + liveDay + ' to ' + SHORT_MONTHS[endMon] + ' ' + endDay + ', ' + endYear;
+  } else if (liveMon === endMon) {
+    // Same month and year
+    datePart = FULL_MONTHS[liveMon] + ' ' + liveDay + ' to ' + endDay + ', ' + endYear;
+  } else {
+    // Different months, same year
+    datePart = FULL_MONTHS[liveMon] + ' ' + liveDay + ' to ' + FULL_MONTHS[endMon] + ' ' + endDay + ', ' + endYear;
+  }
+  return merchantName + ' - ' + datePart;
+}
+
+// ─── Dedupe set ───────────────────────────────────────────────────────────────
+function buildDedupeSet(rows) {
+  const s = new Set();
+  for (const row of rows) {
+    const url = row['Flyer Run (url)'];
+    if (url && url.trim()) s.add(url.trim());
+  }
+  return s;
+}
+
+// ─── Context maps ─────────────────────────────────────────────────────────────
+function buildContextMapPS(rows) {
+  const m = new Map();
+  for (const row of rows) {
+    const ftid = (row['Flyer Type ID (short text)'] || '').trim();
+    if (ftid) m.set(ftid, row);
+  }
+  return m;
+}
+
+function buildContextMapFMQ(rows) {
+  const m = new Map();
+  for (const row of rows) {
+    if ((row['Task Type'] || '').trim() !== 'Task') continue;
+    const mid = (row['Merchant ID (short text)'] || '').trim();
+    const ftid = (row['Flyer Type ID (short text)'] || '').trim();
+    if (mid && ftid) m.set(mid + '_' + ftid, row);
+  }
+  return m;
+}
+
+// ─── PS transformer ───────────────────────────────────────────────────────────
+const PS_HEADERS = [
+  'Task Name',
+  'Task Content',
+  'Due Date',
+  'Start Date',
+  'Ext. Comms (drop down)',
+  'FADMIN Merchant Page (url)',
+  'FQC (drop down)',
+  'FTP Path (url)',
+  'Flyer Cadence (drop down)',
+  'Flyer Review (drop down)',
+  'Flyer Review Guide (url)',
+  'Flyer Run (url)',
+  'Lead (drop down)',
+  'OneGuide (url)',
+  'Page Swaps & Revisions (drop down)',
+  'Preview Date',
+  'Processor (drop down)',
+  'Upload (drop down)',
+  'Valid Date',
+];
+
+function transformPS(fadminRows, contextMap, dedupeSet) {
+  const output = [];
+  const warnings = {};
+  let deduped = 0;
+
+  for (const row of fadminRows) {
+    const flyerRunId = (row['Flyer Run ID'] || '').trim();
+    const merchantName = (row['Merchant Name'] || '').trim();
+    const flyerTypeId = (row['Flyer Type ID'] || '').trim();
+    const flyerRunName = (row['Flyer Run Name'] || '').trim();
+    const liveDate = (row['Live Date'] || '').trim();
+    const validDate = (row['Valid Date'] || '').trim();
+
+    if (!flyerRunId) continue;
+
+    const flyerRunUrl = 'https://fadmin.flippback.com/flyer_runs/' + flyerRunId;
+
+    // Dedupe check
+    if (dedupeSet.has(flyerRunUrl)) { deduped++; continue; }
+
+    // Context lookup
+    const ctx = contextMap.get(flyerTypeId);
+    if (!ctx) { warnings.noContext = (warnings.noContext || 0) + 1; continue; }
+
+    const assetsDays = parseInt(ctx['Assets Check Days (short text)'] || '0') || 0;
+    const previewDays = parseInt(ctx['Preview Days (short text)'] || '0') || 0;
+
+    const startDate = addDays(liveDate, -assetsDays);
+    const previewDate = addDays(liveDate, -previewDays);
+    const dueDate = addDays(previewDate, -1);
+
+    output.push({
+      'Task Name': merchantName + ' - ' + flyerRunName,
+      'Task Content': (ctx['Task Content'] || '').replace(/^\n+|\n+$/g, ''),
+      'Due Date': dueDate,
+      'Start Date': startDate,
+      'Ext. Comms (drop down)': ctx['External Comms (Form Entry) (drop down)'] || '',
+      'FADMIN Merchant Page (url)': ctx['FADMIN Merchant Page (url)'] || '',
+      'FQC (drop down)': ctx['FQC (drop down)'] || '',
+      'FTP Path (url)': ctx['FTP Path (url)'] || '',
+      'Flyer Cadence (drop down)': ctx['Flyer Cadence (drop down)'] || '',
+      'Flyer Review (drop down)': ctx['Flyer Review (drop down)'] || '',
+      'Flyer Review Guide (url)': ctx['Flyer Review Guide (url)'] || '',
+      'Flyer Run (url)': flyerRunUrl,
+      'Lead (drop down)': ctx['Lead (drop down)'] || '',
+      'OneGuide (url)': ctx['OneGuide (url)'] || '',
+      'Page Swaps & Revisions (drop down)': ctx['Page Swaps & Revisions (drop down)'] || '',
+      'Preview Date': previewDate,
+      'Processor (drop down)': ctx['Coordinator (drop down)'] || '',
+      'Upload (drop down)': ctx['Upload (drop down)'] || '',
+      'Valid Date': normDate(validDate),
+    });
+  }
+
+  return { output, warnings, deduped };
+}
+
+// ─── FMQ transformer ──────────────────────────────────────────────────────────
+const FMQ_HEADERS = [
+  'Merchant Name',
+  'Subtasks',
+  'Flyer Run ID',
+  'Flyer Type ID',
+  'Flyer Run Link',
+  'Task Name',
+  'Start Date',
+  'Live/Preview Date',
+  'Valid Date',
+  'Due Date',
+  'End Date',
+  'Oneguide',
+  'Task Description',
+  'Time Estimate',
+];
+
+function transformFMQ(fadminRows, contextMap, dedupeSet) {
+  const output = [];
+  const warnings = {};
+  let deduped = 0;
+
+  for (const row of fadminRows) {
+    const flyerRunId = (row['Flyer Run ID'] || '').trim();
+    const merchantId = (row['Merchant ID'] || '').trim();
+    const merchantName = (row['Merchant Name'] || '').trim();
+    const flyerTypeId = (row['Flyer Type ID'] || '').trim();
+    const liveDate = (row['Live Date'] || '').trim();
+    const validDate = (row['Valid Date'] || '').trim();
+    const endDate = (row['End date'] || '').trim();
+
+    if (!flyerRunId) continue;
+
+    const flyerRunUrl = 'https://fadmin.flippback.com/flyer_runs/' + flyerRunId;
+
+    // Dedupe check
+    if (dedupeSet.has(flyerRunUrl)) { deduped++; continue; }
+
+    // Context lookup
+    const ctx = contextMap.get(merchantId + '_' + flyerTypeId);
+    if (!ctx) { warnings.noContext = (warnings.noContext || 0) + 1; continue; }
+
+    const assetsDays = parseInt(ctx['Assets Check Days (short text)'] || '0') || 0;
+    const previewDays = parseInt(ctx['Preview Days (short text)'] || '0') || 0;
+
+    const startDate = addDays(liveDate, -assetsDays);
+    const previewDate = addDays(liveDate, -previewDays);
+    const dueDate = addDays(previewDate, -1);
+
+    output.push({
+      'Merchant Name': merchantName,
+      'Subtasks': '',
+      'Flyer Run ID': flyerRunId,
+      'Flyer Type ID': flyerTypeId,
+      'Flyer Run Link': flyerRunUrl,
+      'Task Name': formatFMQTaskName(merchantName, liveDate, endDate),
+      'Start Date': startDate,
+      'Live/Preview Date': normDate(liveDate),
+      'Valid Date': normDate(validDate),
+      'Due Date': dueDate,
+      'End Date': normDate(endDate),
+      'Oneguide': ctx['OneGuide (url)'] || '',
+      'Task Description': '',
+      'Time Estimate': ctx['Time Estimate'] || '',
+    });
+  }
+
+  return { output, warnings, deduped };
+}
+
+// ─── Download ─────────────────────────────────────────────────────────────────
+function downloadCSV(rows, headers, filename) {
+  const csv = Papa.unparse({ fields: headers, data: rows.map(r => headers.map(h => r[h] ?? '')) });
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function triggerDownload() {
+  if (!state.outputRows) return;
+  downloadCSV(state.outputRows, state.outputHeaders, state.outputFilename);
+}
+
+// ─── Main transform ───────────────────────────────────────────────────────────
+async function runTransform() {
+  const btn = document.getElementById('btn-process');
+  btn.disabled = true;
+  btn.textContent = 'Processing…';
+  document.getElementById('btn-download').classList.remove('visible');
+  showStatus('', '');
+
+  try {
+    const [fadminRows, contextRows, dedupeRows] = await Promise.all([
+      parseCSV(state.files.fadmin),
+      parseCSV(state.files.context),
+      parseCSV(state.files.dedupe),
+    ]);
+
+    const dedupeSet = buildDedupeSet(dedupeRows);
+    let result;
+
+    if (state.mode === 'ps') {
+      const contextMap = buildContextMapPS(contextRows);
+      result = transformPS(fadminRows, contextMap, dedupeSet);
+      state.outputHeaders = PS_HEADERS;
+      state.outputFilename = 'PS-Import-' + datestamp() + '.csv';
+    } else {
+      const contextMap = buildContextMapFMQ(contextRows);
+      result = transformFMQ(fadminRows, contextMap, dedupeSet);
+      state.outputHeaders = FMQ_HEADERS;
+      state.outputFilename = 'FMQ-Import-' + datestamp() + '.csv';
+    }
+
+    state.outputRows = result.output;
+
+    const label = state.mode === 'ps' ? 'Processing Support' : 'Flyer Management Queue';
+
+    const noCtx = result.warnings.noContext || 0;
+    const warnLines = [];
+    if (noCtx > 0) warnLines.push(noCtx + ' row' + (noCtx !== 1 ? 's' : '') + ' skipped — not in ' + label + ' context file (expected for retailers in other workflows).');
+
+    if (result.output.length === 0) {
+      let zeroMsg = 'All flyer runs already exist in ClickUp or have no context match. Nothing new to import.';
+      if (result.deduped > 0) zeroMsg = result.deduped + ' run(s) already in ClickUp (dedupe). ' + zeroMsg;
+      showStatus('warning', '0 rows to import', zeroMsg, warnLines);
+    } else {
+      let detail = result.output.length + ' row' + (result.output.length !== 1 ? 's' : '') + ' ready for import into ' + label + '.';
+      if (result.deduped > 0) detail += ' ' + result.deduped + ' existing run' + (result.deduped !== 1 ? 's' : '') + ' skipped (already in ClickUp).';
+      showStatus('success', 'Ready to download', detail, warnLines);
+      document.getElementById('btn-download').classList.add('visible');
+    }
+
+  } catch (err) {
+    showStatus('error', 'Error during processing', err.message || String(err));
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Generate CSV';
+}
+
+// ─── Status display ───────────────────────────────────────────────────────────
+function showStatus(type, title, detail, warnLines) {
+  const area = document.getElementById('status-area');
+  const box = document.getElementById('status-box');
+  if (!type) { area.classList.remove('visible'); return; }
+
+  area.classList.add('visible');
+  box.className = 'status-box ' + type;
+
+  let html = '<div class="status-title">' + escHtml(title) + '</div>';
+  if (detail) html += '<div class="status-detail">' + escHtml(detail) + '</div>';
+  if (warnLines && warnLines.length > 0) {
+    html += '<ul class="warn-list">';
+    for (const w of warnLines) html += '<li>' + escHtml(w) + '</li>';
+    html += '</ul>';
+  }
+  box.innerHTML = html;
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function datestamp() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>
