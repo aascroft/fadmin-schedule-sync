@@ -451,13 +451,21 @@ function fileSelected(key, input) {
 }
 
 function setFile(key, file) {
-  state.files[key] = file;
-  state.parsedFiles[key] = null;
   const dz = document.getElementById('dz-' + key);
   const textEl = document.getElementById('dz-' + key + '-text');
+
+  if (!file.name.toLowerCase().endsWith('.csv')) {
+    dz.classList.remove('has-file');
+    textEl.innerHTML = '<span style="color:#991b1b;">✗ ' + escHtml(file.name) + ' — not a CSV file. Re-export from FAdmin or ClickUp and select CSV format.</span>';
+    state.files[key] = null;
+    updateProcessButton();
+    return;
+  }
+
+  state.files[key] = file;
+  state.parsedFiles[key] = null;
   dz.classList.add('has-file');
   textEl.innerHTML = '<span class="dz-filename">✓ ' + escHtml(file.name) + '</span>';
-  // Reset output when files change
   state.outputRows = null;
   document.getElementById('btn-download').classList.remove('visible');
   document.getElementById('status-area').classList.remove('visible');
@@ -467,6 +475,13 @@ function setFile(key, file) {
 function updateProcessButton() {
   const ready = state.mode && state.files.fadmin && state.files.context && state.files.dedupe;
   document.getElementById('btn-process').disabled = !ready;
+}
+
+// ─── Column validation ────────────────────────────────────────────────────────
+function validateColumns(rows, requiredCols) {
+  if (!rows || rows.length === 0) return requiredCols.slice();
+  const present = Object.keys(rows[0]);
+  return requiredCols.filter(c => !present.includes(c));
 }
 
 // ─── CSV parsing ──────────────────────────────────────────────────────────────
@@ -614,6 +629,7 @@ function transformPS(fadminRows, contextMap, dedupeSet) {
     const assetsDays = parseInt(ctx['Assets Check Days (short text)'] || '0') || 0;
     const previewDays = parseInt(ctx['Preview Days (short text)'] || '0') || 0;
 
+    if (!liveDate) { warnings.blankDate = (warnings.blankDate || 0) + 1; }
     const startDate = addDays(liveDate, -assetsDays);
     const previewDate = addDays(liveDate, -previewDays);
     const dueDate = addDays(previewDate, -1);
@@ -690,6 +706,7 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
     const assetsDays = parseInt(ctx['Assets Check Days (short text)'] || '0') || 0;
     const previewDays = parseInt(ctx['Preview Days (short text)'] || '0') || 0;
 
+    if (!liveDate) { warnings.blankDate = (warnings.blankDate || 0) + 1; }
     const startDate = addDays(liveDate, -assetsDays);
     const previewDate = addDays(liveDate, -previewDays);
     const dueDate = addDays(previewDate, -1);
@@ -745,10 +762,41 @@ async function runTransform() {
       parseCSV(state.files.dedupe),
     ]);
 
+    // ── Column validation ──────────────────────────────────────────────────────
+    const isPS = state.mode === 'ps';
+    const label = isPS ? 'Processing Support' : 'Flyer Management Queue';
+
+    const fadminRequired = ['Flyer Run ID', 'Merchant Name', 'Flyer Type ID', 'Live Date'];
+    if (!isPS) fadminRequired.push('Merchant ID', 'End date');
+    const fadminMissing = validateColumns(fadminRows, fadminRequired);
+    if (fadminMissing.length > 0) {
+      showStatus('error', 'Wrong file in the FAdmin Export zone',
+        'The FAdmin export is missing expected columns: ' + fadminMissing.map(c => '"' + c + '"').join(', ') + '. Make sure you uploaded the correct FAdmin export file (not a ClickUp file).');
+      btn.disabled = false; btn.textContent = 'Generate CSV'; return;
+    }
+
+    const contextRequired = isPS
+      ? ['Flyer Type ID (short text)', 'Preview Days (short text)', 'Assets Check Days (short text)']
+      : ['Merchant ID (short text)', 'Flyer Type ID (short text)', 'Task Type', 'Preview Days (short text)', 'Assets Check Days (short text)'];
+    const contextMissing = validateColumns(contextRows, contextRequired);
+    if (contextMissing.length > 0) {
+      showStatus('error', 'Problem with the ' + label + ' context file',
+        'The context file is missing expected columns: ' + contextMissing.map(c => '"' + c + '"').join(', ') + '. Make sure you exported with "All Columns" toggled on, and that you selected the correct ClickUp list for ' + label + '.');
+      btn.disabled = false; btn.textContent = 'Generate CSV'; return;
+    }
+
+    const dedupeMissing = validateColumns(dedupeRows, ['Flyer Run (url)']);
+    if (dedupeMissing.length > 0) {
+      showStatus('error', 'Problem with the dedupe file',
+        'The dedupe file is missing the "Flyer Run (url)" column. Without it, the tool cannot check for duplicates and could create thousands of duplicate tasks in ClickUp. Re-export the dedupe file with "All Columns" toggled on before continuing.');
+      btn.disabled = false; btn.textContent = 'Generate CSV'; return;
+    }
+
+    // ── Transform ─────────────────────────────────────────────────────────────
     const dedupeSet = buildDedupeSet(dedupeRows);
     let result;
 
-    if (state.mode === 'ps') {
+    if (isPS) {
       const contextMap = buildContextMapPS(contextRows);
       result = transformPS(fadminRows, contextMap, dedupeSet);
       state.outputHeaders = PS_HEADERS;
@@ -762,17 +810,29 @@ async function runTransform() {
 
     state.outputRows = result.output;
 
-    const label = state.mode === 'ps' ? 'Processing Support' : 'Flyer Management Queue';
-
     const noCtx = result.warnings.noContext || 0;
+    const blankDates = result.warnings.blankDate || 0;
     const warnLines = [];
-    if (noCtx > 0) warnLines.push(noCtx + ' row' + (noCtx !== 1 ? 's' : '') + ' skipped — not in ' + label + ' context file (expected for retailers in other workflows).');
+
+    if (blankDates > 0) {
+      warnLines.push(blankDates + ' row' + (blankDates !== 1 ? 's' : '') + ' had a blank or unreadable Live Date — Start Date, Preview Date, and Due Date will be empty for those rows. Review them after importing.');
+    }
 
     if (result.output.length === 0) {
-      let zeroMsg = 'All flyer runs already exist in ClickUp or have no context match. Nothing new to import.';
-      if (result.deduped > 0) zeroMsg = result.deduped + ' run(s) already in ClickUp (dedupe). ' + zeroMsg;
-      showStatus('warning', '0 rows to import', zeroMsg, warnLines);
+      // Distinguish total context miss (wrong file) from expected partial miss
+      const totalProcessed = fadminRows.length - result.deduped;
+      if (noCtx > 0 && noCtx === totalProcessed) {
+        showStatus('error', 'No rows matched the context file',
+          'Every row in the FAdmin export failed to match the ' + label + ' context file. This usually means the wrong context file was uploaded, or the ClickUp export is missing the "All Columns" setting. Double-check that you selected the correct list in ClickUp.',
+          warnLines);
+      } else {
+        let zeroMsg = 'All flyer runs already exist in ClickUp or have no context match. Nothing new to import.';
+        if (result.deduped > 0) zeroMsg = result.deduped + ' run(s) already in ClickUp (dedupe). ' + zeroMsg;
+        if (noCtx > 0) warnLines.push(noCtx + ' row' + (noCtx !== 1 ? 's' : '') + ' skipped — not in ' + label + ' context file (expected for retailers in other workflows).');
+        showStatus('warning', '0 rows to import', zeroMsg, warnLines);
+      }
     } else {
+      if (noCtx > 0) warnLines.push(noCtx + ' row' + (noCtx !== 1 ? 's' : '') + ' skipped — not in ' + label + ' context file (expected for retailers in other workflows).');
       let detail = result.output.length + ' row' + (result.output.length !== 1 ? 's' : '') + ' ready for import into ' + label + '.';
       if (result.deduped > 0) detail += ' ' + result.deduped + ' existing run' + (result.deduped !== 1 ? 's' : '') + ' skipped (already in ClickUp).';
       showStatus('success', 'Ready to download', detail, warnLines);
