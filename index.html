@@ -648,12 +648,12 @@ function transformPS(fadminRows, contextMap, dedupeSet) {
 
 // ─── FMQ transformer ──────────────────────────────────────────────────────────
 const FMQ_HEADERS = [
+  'Task Name',
   'Merchant Name',
   'Subtasks',
   'Flyer Run ID',
   'Flyer Type ID',
   'Flyer Run Link',
-  'Task Name',
   'Start Date',
   'Live Date',
   'Preview Date',
@@ -703,17 +703,18 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
 
     if (!liveDate) { warnings.blankDate = (warnings.blankDate || 0) + 1; }
     const startDate = addDays(liveDate, -assetsDays);
-    const hasPreviewDays = previewDays > 0;
-    const previewDateStr = hasPreviewDays ? addDays(liveDate, -previewDays) : '';
-    const dueDateStr = hasPreviewDays ? addDays(liveDate, -previewDays - 1) : '';
+    const previewDateStr = previewDays > 0 ? addDays(liveDate, -previewDays) : '';
+    // Due Date is always one day before the Preview Date; when there is no
+    // Preview Date (Preview Days 0/unset) it falls back to Live Date − 1.
+    const dueDateStr = addDays(liveDate, -previewDays - 1);
 
     output.push({
+      'Task Name': merchantName + (flyerRunName ? ' - ' + flyerRunName : ''),
       'Merchant Name': merchantName,
       'Subtasks': ctx['_subtasks'] || '',
       'Flyer Run ID': flyerRunId,
       'Flyer Type ID': flyerTypeId,
       'Flyer Run Link': flyerRunUrl,
-      'Task Name': merchantName + (flyerRunName ? ' - ' + flyerRunName : ''),
       'Start Date': startDate,
       'Live Date': normDate(liveDate),
       'Preview Date': previewDateStr,
@@ -728,8 +729,8 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
       'Flyer Cadence (drop down)': ctx['Flyer Cadence (drop down)'] || '',
       'Flyer Review Guide (url)': ctx['Flyer Review Guide (url)'] || '',
       'Category (drop down)': ctx['Category (drop down)'] || '',
-      'FADMIN Merchant Page (url)': ctx['FADMIN Merchant Page (url)'] || '',
-      'FTP Path (url)': ctx['FTP Path (url)'] || '',
+      'FADMIN Merchant Page (url)': merchantId ? 'https://fadmin.flippback.com/merchants/' + merchantId + '/dashboard' : '',
+      'FTP Path (url)': merchantId ? 'https://fadmin.flippback.com/merchants/' + merchantId + '/ftp_files' : '',
     });
   }
 

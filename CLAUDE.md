@@ -85,7 +85,8 @@ Filter these out before reaching for a fix.
 5. **Rows that fail context lookup are skipped.** The "noContext" warning count is informational — many FAdmin rows are for retailers in the OTHER workflow, that's expected.
 6. **`PS_HEADERS` / `FMQ_HEADERS` arrays and the row-construction objects are separate blocks.** Both must be edited together when changing columns.
 7. **FMQ filters `Task Type = "Task"` only.** Subtasks and section rows are excluded by design. If FMQ output is missing a merchant, this filter is the first thing to check (the merchant might exist in the context file as a subtask row).
-8. **FMQ `Preview Date` and `Due Date` blank for some merchants** is intentional. When `Preview Days` is 0 or unset in the FMQ context file, both columns output blank. Don't treat blanks as a bug — check the context file for that merchant's Preview Days value.
+8. **FMQ `Preview Date` blank for some merchants** is intentional. When `Preview Days` is 0 or unset in the FMQ context file, `Preview Date` outputs blank. (`Due Date` is **not** blanked — it falls back to Live Date − 1; see the FMQ Due Date rule.) Don't treat a blank Preview Date as a bug — check the context file for that merchant's Preview Days value.
+9. **FMQ `FADMIN Merchant Page (url)` / `FTP Path (url)` are constructed from Merchant ID, not read from context.** They will be populated on every FMQ row even when the Merchant Information Database leaves those fields blank. This is intentional (round 2 feedback fix). Renaming those context columns does not affect FMQ output. PS mode still reads them from its context file.
 
 ---
 
@@ -163,7 +164,7 @@ The user selects a mode, uploads three CSV files, clicks Generate, and downloads
 | Column Name | Purpose |
 |---|---|
 | `Flyer Run ID` | Constructs the Flyer Run URL; used as dedupe key |
-| `Merchant ID` | FMQ join key (not output) |
+| `Merchant ID` | FMQ join key; FMQ also constructs `FADMIN Merchant Page (url)` + `FTP Path (url)` from it |
 | `Merchant Name` | Output (both modes) |
 | `Flyer Type ID` | PS join key; FMQ join key |
 | `Flyer Run Name` | PS Task Name (second half of concatenation) |
@@ -182,8 +183,8 @@ Both context files have `Assets Check Days (short text)` and `Preview Days (shor
 | Output Field | Formula |
 |---|---|
 | Start Date | `Live Date − Assets Check Days` |
-| Preview Date | `Live Date − Preview Days` |
-| Due Date | `Live Date − Preview Days − 1` (i.e., Preview Date − 1) |
+| Preview Date | `Live Date − Preview Days` (FMQ: blank when Preview Days is 0/unset) |
+| Due Date | `Live Date − Preview Days − 1` (i.e., Preview Date − 1; when Preview Days is 0/unset this is Live Date − 1). **FMQ Due Date is never blank.** |
 | Valid Date | FAdmin `Valid Date` column — passthrough only |
 | Live/Preview Date (FMQ) | FAdmin `Live Date` column — passthrough only |
 | End Date (FMQ) | FAdmin `End date` column — passthrough only |
@@ -255,17 +256,17 @@ Comma-separated `Task Name` values of all `Flyer Subtask` rows in the context fi
 
 | # | Output Header | Source |
 |---|---|---|
-| 1 | `Merchant Name` | FAdmin `Merchant Name` |
-| 2 | `Subtasks` | Comma-separated Flyer Subtask names from FMQ Context (see above) |
-| 3 | `Flyer Run ID` | FAdmin `Flyer Run ID` |
-| 4 | `Flyer Type ID` | FAdmin `Flyer Type ID` |
-| 5 | `Flyer Run Link` | `https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}` |
-| 6 | `Task Name` | `{Merchant Name} - {Flyer Run Name}` |
+| 1 | `Task Name` | `{Merchant Name} - {Flyer Run Name}` |
+| 2 | `Merchant Name` | FAdmin `Merchant Name` |
+| 3 | `Subtasks` | Comma-separated Flyer Subtask names from FMQ Context (see above) |
+| 4 | `Flyer Run ID` | FAdmin `Flyer Run ID` |
+| 5 | `Flyer Type ID` | FAdmin `Flyer Type ID` |
+| 6 | `Flyer Run Link` | `https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}` |
 | 7 | `Start Date` | Live Date − Assets Check Days → M/D/YYYY |
 | 8 | `Live Date` | FAdmin `Live Date` → M/D/YYYY (passthrough) |
 | 9 | `Preview Date` | Live Date − Preview Days → M/D/YYYY; **blank if Preview Days is 0 or unset** |
 | 10 | `Valid Date` | FAdmin `Valid Date` → M/D/YYYY (passthrough) |
-| 11 | `Due Date` | Live Date − Preview Days − 1 → M/D/YYYY; **blank if Preview Days is 0 or unset** |
+| 11 | `Due Date` | Live Date − Preview Days − 1 → M/D/YYYY. **Never blank** (= Live Date − 1 when Preview Days is 0/unset; = Preview Date − 1 otherwise) |
 | 12 | `End Date` | FAdmin `End date` → M/D/YYYY (passthrough) |
 | 13 | `Oneguide` | FMQ Context `OneGuide (url)` |
 | 14 | `Task Description` | *(empty)* |
@@ -275,8 +276,10 @@ Comma-separated `Task Name` values of all `Flyer Subtask` rows in the context fi
 | 18 | `Flyer Cadence (drop down)` | FMQ Context `Flyer Cadence (drop down)` |
 | 19 | `Flyer Review Guide (url)` | FMQ Context `Flyer Review Guide (url)` |
 | 20 | `Category (drop down)` | FMQ Context `Category (drop down)` |
-| 21 | `FADMIN Merchant Page (url)` | FMQ Context `FADMIN Merchant Page (url)` |
-| 22 | `FTP Path (url)` | FMQ Context `FTP Path (url)` |
+| 21 | `FADMIN Merchant Page (url)` | **Constructed:** `https://fadmin.flippback.com/merchants/{Merchant ID}/dashboard` (FAdmin `Merchant ID`, not context — see note below) |
+| 22 | `FTP Path (url)` | **Constructed:** `https://fadmin.flippback.com/merchants/{Merchant ID}/ftp_files` (FAdmin `Merchant ID`, not context) |
+
+**Why constructed, not pulled from context:** the Merchant Information Database leaves these two fields blank on ~75% of Task rows, but both URLs are a fixed FAdmin URL scheme keyed by Merchant ID (verified 370/370 + 366/370 against populated rows; the 4 exceptions were data-entry errors in ClickUp). Constructing from FAdmin `Merchant ID` populates every row and is immune to ClickUp data hygiene. PS mode still pulls these from its context file — only FMQ constructs them.
 
 ### Required Columns — FMQ Context File
 `Merchant ID (short text)`, `Flyer Type ID (short text)`, `Task Type`, `Preview Days (short text)`, `Assets Check Days (short text)`
