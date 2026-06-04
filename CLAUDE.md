@@ -30,7 +30,7 @@ The tool is in V1 team testing. The team submits feedback via a Google Sheet —
 
 ## Code Reference Map
 
-Line numbers in `index.html` (887 lines, single-file app):
+Line numbers in `index.html` (approx. 900 lines, single-file app):
 
 | Concept | Function / Block | Lines |
 |---|---|---|
@@ -39,19 +39,18 @@ Line numbers in `index.html` (887 lines, single-file app):
 | Column existence validation | `validateColumns` | 481-486 |
 | FAdmin date parsing (MM/DD/YYYY) | `parseFAdminDate` | 500-507 |
 | Date math + normalize to M/D/YYYY | `addDays`, `normDate` | 508-520 |
-| FMQ task-name date-range formatter (3 cases) | `formatFMQTaskName` | 525-550 |
-| Dedupe Set construction | `buildDedupeSet` | 552-560 |
-| PS context map (join: Flyer Type ID) | `buildContextMapPS` | 562-569 |
-| FMQ context map (filters Task Type = "Task") | `buildContextMapFMQ` | 571-581 |
-| **PS output headers (19 cols, fixed order)** | `PS_HEADERS` constant | 583-603 |
-| PS transform main loop | `transformPS` | 605-662 |
-| **PS row construction (output object)** | inside `transformPS` | 638-657 |
-| **FMQ output headers (14 cols, fixed order)** | `FMQ_HEADERS` constant | 664-679 |
-| FMQ transform main loop | `transformFMQ` | 681-734 |
-| **FMQ row construction (output object)** | inside `transformFMQ` | 711-731 |
-| CSV unparse + download trigger | `downloadCSV` | 736-743 |
-| Validation + transform orchestration | `runTransform` | 750-848 |
-| User-facing status / error display | `showStatus` | 851-868 |
+| Dedupe Set construction | `buildDedupeSet` | 524-531 |
+| PS context map (join: Flyer Type ID) | `buildContextMapPS` | 533-540 |
+| FMQ context map (filters Task Type = "Task", collects Flyer Subtask names) | `buildContextMapFMQ` | 543-566 |
+| **PS output headers (19 cols, fixed order)** | `PS_HEADERS` constant | 569-589 |
+| PS transform main loop | `transformPS` | 591-647 |
+| **PS row construction (output object)** | inside `transformPS` | 621-643 |
+| **FMQ output headers (22 cols, fixed order)** | `FMQ_HEADERS` constant | 650-673 |
+| FMQ transform main loop | `transformFMQ` | 675-737 |
+| **FMQ row construction (output object)** | inside `transformFMQ` | 710-733 |
+| CSV unparse + download trigger | `downloadCSV` | 739-746 |
+| Validation + transform orchestration | `runTransform` | 753-855 |
+| User-facing status / error display | `showStatus` | 858-875 |
 
 **Critical footgun:** the `*_HEADERS` constant and the row-construction object inside the transform are **separate blocks**. Adding, removing, or renaming a column requires editing **both**. If only one changes, output gets a missing column or a mismatched header. The two blocks are 35-50 lines apart for each mode.
 
@@ -86,6 +85,7 @@ Filter these out before reaching for a fix.
 5. **Rows that fail context lookup are skipped.** The "noContext" warning count is informational — many FAdmin rows are for retailers in the OTHER workflow, that's expected.
 6. **`PS_HEADERS` / `FMQ_HEADERS` arrays and the row-construction objects are separate blocks.** Both must be edited together when changing columns.
 7. **FMQ filters `Task Type = "Task"` only.** Subtasks and section rows are excluded by design. If FMQ output is missing a merchant, this filter is the first thing to check (the merchant might exist in the context file as a subtask row).
+8. **FMQ `Preview Date` and `Due Date` blank for some merchants** is intentional. When `Preview Days` is 0 or unset in the FMQ context file, both columns output blank. Don't treat blanks as a bug — check the context file for that merchant's Preview Days value.
 
 ---
 
@@ -243,36 +243,40 @@ FAdmin `Merchant ID` + `Flyer Type ID` → FMQ Context `Merchant ID (short text)
 
 **Critical:** Only rows in the FMQ context file where `Task Type` = `Task` are used to build the lookup map. Subtask rows and section rows are excluded.
 
-### Task Name — Date Range Format
+### Task Name
+`{Merchant Name} - {Flyer Run Name}`
 
-The FMQ task name is a date range built from the FAdmin `Live Date` and `End date` columns. Three format rules apply:
+Direct concatenation with ` - ` separator. Source is FAdmin `Flyer Run Name` column — same pattern as PS mode. If `Flyer Run Name` is blank, output is just the merchant name.
 
-| Condition | Format | Example |
-|---|---|---|
-| Live and End in same month and year | `{Merchant} - {Full Month} {start day} to {end day}, {year}` | `Accès pharma - January 15 to 28, 2026` |
-| Different months, same year | `{Merchant} - {Full Month} {start day} to {Full Month} {end day}, {year}` | `Accès pharma - January 29 to February 11, 2026` |
-| Different months AND different years (cross-year) | `{Merchant} - {Short Month} {start day} to {Short Month} {end day}, {end year}` | `Accès pharma - Dec 18 to Jan 14, 2026` |
+### Subtasks
+Comma-separated `Task Name` values of all `Flyer Subtask` rows in the context file whose `Parent ID` matches the matched Task row's `Task ID`. Empty if none.
 
-If either date is missing or unparseable, the task name falls back to the merchant name only.
-
-### Output — 14 Columns (exact order)
+### Output — 22 Columns (exact order)
 
 | # | Output Header | Source |
 |---|---|---|
 | 1 | `Merchant Name` | FAdmin `Merchant Name` |
-| 2 | `Subtasks` | *(empty)* |
+| 2 | `Subtasks` | Comma-separated Flyer Subtask names from FMQ Context (see above) |
 | 3 | `Flyer Run ID` | FAdmin `Flyer Run ID` |
 | 4 | `Flyer Type ID` | FAdmin `Flyer Type ID` |
 | 5 | `Flyer Run Link` | `https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}` |
-| 6 | `Task Name` | Date range format (see rules above) |
+| 6 | `Task Name` | `{Merchant Name} - {Flyer Run Name}` |
 | 7 | `Start Date` | Live Date − Assets Check Days → M/D/YYYY |
-| 8 | `Live/Preview Date` | FAdmin `Live Date` → M/D/YYYY (passthrough) |
-| 9 | `Valid Date` | FAdmin `Valid Date` → M/D/YYYY (passthrough) |
-| 10 | `Due Date` | Live Date − Preview Days − 1 → M/D/YYYY |
-| 11 | `End Date` | FAdmin `End date` → M/D/YYYY (passthrough) |
-| 12 | `Oneguide` | FMQ Context `OneGuide (url)` |
-| 13 | `Task Description` | *(empty)* |
-| 14 | `Time Estimate` | FMQ Context `Time Estimate` |
+| 8 | `Live Date` | FAdmin `Live Date` → M/D/YYYY (passthrough) |
+| 9 | `Preview Date` | Live Date − Preview Days → M/D/YYYY; **blank if Preview Days is 0 or unset** |
+| 10 | `Valid Date` | FAdmin `Valid Date` → M/D/YYYY (passthrough) |
+| 11 | `Due Date` | Live Date − Preview Days − 1 → M/D/YYYY; **blank if Preview Days is 0 or unset** |
+| 12 | `End Date` | FAdmin `End date` → M/D/YYYY (passthrough) |
+| 13 | `Oneguide` | FMQ Context `OneGuide (url)` |
+| 14 | `Task Description` | *(empty)* |
+| 15 | `Time Estimate` | FMQ Context `Time Estimate` |
+| 16 | `Segment (drop down)` | FMQ Context `Segment (drop down)` |
+| 17 | `Parent Banner (drop down)` | FMQ Context `Parent Banner (drop down)` |
+| 18 | `Flyer Cadence (drop down)` | FMQ Context `Flyer Cadence (drop down)` |
+| 19 | `Flyer Review Guide (url)` | FMQ Context `Flyer Review Guide (url)` |
+| 20 | `Category (drop down)` | FMQ Context `Category (drop down)` |
+| 21 | `FADMIN Merchant Page (url)` | FMQ Context `FADMIN Merchant Page (url)` |
+| 22 | `FTP Path (url)` | FMQ Context `FTP Path (url)` |
 
 ### Required Columns — FMQ Context File
 `Merchant ID (short text)`, `Flyer Type ID (short text)`, `Task Type`, `Preview Days (short text)`, `Assets Check Days (short text)`

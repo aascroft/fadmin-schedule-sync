@@ -519,34 +519,6 @@ function normDate(dateStr) {
   return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
 }
 
-const FULL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-function formatFMQTaskName(merchantName, liveDateStr, endDateStr) {
-  const live = parseFAdminDate(liveDateStr);
-  const end = parseFAdminDate(endDateStr);
-  if (!live || !end) return merchantName;
-
-  const liveDay = live.getDate();
-  const endDay = end.getDate();
-  const liveMon = live.getMonth();
-  const endMon = end.getMonth();
-  const liveYear = live.getFullYear();
-  const endYear = end.getFullYear();
-
-  let datePart;
-  if (liveYear !== endYear) {
-    // Cross-year: abbreviated months
-    datePart = SHORT_MONTHS[liveMon] + ' ' + liveDay + ' to ' + SHORT_MONTHS[endMon] + ' ' + endDay + ', ' + endYear;
-  } else if (liveMon === endMon) {
-    // Same month and year
-    datePart = FULL_MONTHS[liveMon] + ' ' + liveDay + ' to ' + endDay + ', ' + endYear;
-  } else {
-    // Different months, same year
-    datePart = FULL_MONTHS[liveMon] + ' ' + liveDay + ' to ' + FULL_MONTHS[endMon] + ' ' + endDay + ', ' + endYear;
-  }
-  return merchantName + ' - ' + datePart;
-}
 
 // ─── Dedupe set ───────────────────────────────────────────────────────────────
 function buildDedupeSet(rows) {
@@ -569,12 +541,26 @@ function buildContextMapPS(rows) {
 }
 
 function buildContextMapFMQ(rows) {
+  const subtasksByParent = new Map();
+  for (const row of rows) {
+    if ((row['Task Type'] || '').trim() !== 'Flyer Subtask') continue;
+    const parentId = (row['Parent ID'] || '').trim();
+    const name = (row['Task Name'] || '').trim();
+    if (parentId && name) {
+      if (!subtasksByParent.has(parentId)) subtasksByParent.set(parentId, []);
+      subtasksByParent.get(parentId).push(name);
+    }
+  }
   const m = new Map();
   for (const row of rows) {
     if ((row['Task Type'] || '').trim() !== 'Task') continue;
     const mid = (row['Merchant ID (short text)'] || '').trim();
     const ftid = (row['Flyer Type ID (short text)'] || '').trim();
-    if (mid && ftid) m.set(mid + '_' + ftid, row);
+    if (mid && ftid) {
+      const taskId = (row['Task ID'] || '').trim();
+      const subtasks = subtasksByParent.get(taskId) || [];
+      m.set(mid + '_' + ftid, { ...row, _subtasks: subtasks.join(', ') });
+    }
   }
   return m;
 }
@@ -669,13 +655,21 @@ const FMQ_HEADERS = [
   'Flyer Run Link',
   'Task Name',
   'Start Date',
-  'Live/Preview Date',
+  'Live Date',
+  'Preview Date',
   'Valid Date',
   'Due Date',
   'End Date',
   'Oneguide',
   'Task Description',
   'Time Estimate',
+  'Segment (drop down)',
+  'Parent Banner (drop down)',
+  'Flyer Cadence (drop down)',
+  'Flyer Review Guide (url)',
+  'Category (drop down)',
+  'FADMIN Merchant Page (url)',
+  'FTP Path (url)',
 ];
 
 function transformFMQ(fadminRows, contextMap, dedupeSet) {
@@ -688,6 +682,7 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
     const merchantId = (row['Merchant ID'] || '').trim();
     const merchantName = (row['Merchant Name'] || '').trim();
     const flyerTypeId = (row['Flyer Type ID'] || '').trim();
+    const flyerRunName = (row['Flyer Run Name'] || '').trim();
     const liveDate = (row['Live Date'] || '').trim();
     const validDate = (row['Valid Date'] || '').trim();
     const endDate = (row['End date'] || '').trim();
@@ -708,24 +703,33 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
 
     if (!liveDate) { warnings.blankDate = (warnings.blankDate || 0) + 1; }
     const startDate = addDays(liveDate, -assetsDays);
-    const previewDate = addDays(liveDate, -previewDays);
-    const dueDate = addDays(previewDate, -1);
+    const hasPreviewDays = previewDays > 0;
+    const previewDateStr = hasPreviewDays ? addDays(liveDate, -previewDays) : '';
+    const dueDateStr = hasPreviewDays ? addDays(liveDate, -previewDays - 1) : '';
 
     output.push({
       'Merchant Name': merchantName,
-      'Subtasks': '',
+      'Subtasks': ctx['_subtasks'] || '',
       'Flyer Run ID': flyerRunId,
       'Flyer Type ID': flyerTypeId,
       'Flyer Run Link': flyerRunUrl,
-      'Task Name': formatFMQTaskName(merchantName, liveDate, endDate),
+      'Task Name': merchantName + (flyerRunName ? ' - ' + flyerRunName : ''),
       'Start Date': startDate,
-      'Live/Preview Date': normDate(liveDate),
+      'Live Date': normDate(liveDate),
+      'Preview Date': previewDateStr,
       'Valid Date': normDate(validDate),
-      'Due Date': dueDate,
+      'Due Date': dueDateStr,
       'End Date': normDate(endDate),
       'Oneguide': ctx['OneGuide (url)'] || '',
       'Task Description': '',
       'Time Estimate': ctx['Time Estimate'] || '',
+      'Segment (drop down)': ctx['Segment (drop down)'] || '',
+      'Parent Banner (drop down)': ctx['Parent Banner (drop down)'] || '',
+      'Flyer Cadence (drop down)': ctx['Flyer Cadence (drop down)'] || '',
+      'Flyer Review Guide (url)': ctx['Flyer Review Guide (url)'] || '',
+      'Category (drop down)': ctx['Category (drop down)'] || '',
+      'FADMIN Merchant Page (url)': ctx['FADMIN Merchant Page (url)'] || '',
+      'FTP Path (url)': ctx['FTP Path (url)'] || '',
     });
   }
 
@@ -767,7 +771,7 @@ async function runTransform() {
     const label = isPS ? 'Processing Support' : 'Flyer Management Queue';
 
     const fadminRequired = ['Flyer Run ID', 'Merchant Name', 'Flyer Type ID', 'Live Date'];
-    if (!isPS) fadminRequired.push('Merchant ID', 'End date');
+    if (!isPS) fadminRequired.push('Merchant ID', 'End date', 'Flyer Run Name');
     const fadminMissing = validateColumns(fadminRows, fadminRequired);
     if (fadminMissing.length > 0) {
       showStatus('error', 'Wrong file in the FAdmin Export zone',
