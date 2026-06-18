@@ -42,9 +42,9 @@ Line numbers in `index.html` (approx. 900 lines, single-file app):
 | Dedupe Set construction | `buildDedupeSet` | 524-531 |
 | PS context map (join: Flyer Type ID) | `buildContextMapPS` | 533-540 |
 | FMQ context map (filters Task Type = "Task", collects Flyer Subtask names) | `buildContextMapFMQ` | 543-566 |
-| **PS output headers (19 cols, fixed order)** | `PS_HEADERS` constant | 569-589 |
-| PS transform main loop | `transformPS` | 591-647 |
-| **PS row construction (output object)** | inside `transformPS` | 621-643 |
+| **PS output headers (20 cols, fixed order)** | `PS_HEADERS` constant | 569-590 |
+| PS transform main loop | `transformPS` | 592-648 |
+| **PS row construction (output object)** | inside `transformPS` | 624-646 |
 | **FMQ output headers (22 cols, fixed order)** | `FMQ_HEADERS` constant | 650-673 |
 | FMQ transform main loop | `transformFMQ` | 675-737 |
 | **FMQ row construction (output object)** | inside `transformFMQ` | 710-733 |
@@ -78,15 +78,15 @@ Line numbers in `index.html` (approx. 900 lines, single-file app):
 
 Filter these out before reaching for a fix.
 
-1. **`Coordinator (drop down)` → `Processor (drop down)`** is intentional. The PS context file has "Coordinator (drop down)"; the output column is "Processor (drop down)". They're the same field with different names. Don't "fix" the mapping.
-2. **`End date` with lowercase 'd'** is intentional. FAdmin's column header literally has lowercase d. Don't change to "End Date".
-3. **`Valid Date` differs from `Live Date`** is expected. They're different columns in FAdmin and can have different values for the same row. Don't combine or substitute.
-4. **Output dates have no leading zeros** (`4/3/2026`, not `04/03/2026`). Intentional — this is what ClickUp accepts. Don't reformat.
-5. **Rows that fail context lookup are skipped.** The "noContext" warning count is informational — many FAdmin rows are for retailers in the OTHER workflow, that's expected.
-6. **`PS_HEADERS` / `FMQ_HEADERS` arrays and the row-construction objects are separate blocks.** Both must be edited together when changing columns.
-7. **FMQ filters `Task Type = "Task"` only.** Subtasks and section rows are excluded by design. If FMQ output is missing a merchant, this filter is the first thing to check (the merchant might exist in the context file as a subtask row).
-8. **FMQ `Preview Date` blank for some merchants** is intentional. When `Preview Days` is 0 or unset in the FMQ context file, `Preview Date` outputs blank. (`Due Date` is **not** blanked — it falls back to Live Date − 1; see the FMQ Due Date rule.) Don't treat a blank Preview Date as a bug — check the context file for that merchant's Preview Days value.
-9. **FMQ `FADMIN Merchant Page (url)` / `FTP Path (url)` are constructed from Merchant ID, not read from context.** They will be populated on every FMQ row even when the Merchant Information Database leaves those fields blank. This is intentional (round 2 feedback fix). Renaming those context columns does not affect FMQ output. PS mode still reads them from its context file.
+1. **`End date` with lowercase 'd'** is intentional. FAdmin's column header literally has lowercase d. Don't change to "End Date".
+2. **`Valid Date` differs from `Live Date`** is expected. They're different columns in FAdmin and can have different values for the same row. Don't combine or substitute. The "date calc off by one" appearance is almost always caused by using Valid Date as a proxy for Live Date — they can differ by a day or more.
+3. **Output dates have no leading zeros** (`4/3/2026`, not `04/03/2026`). Intentional — this is what ClickUp accepts. Don't reformat.
+4. **Rows that fail context lookup are skipped.** The "noContext" warning count is informational — many FAdmin rows are for retailers in the OTHER workflow, that's expected.
+5. **`PS_HEADERS` / `FMQ_HEADERS` arrays and the row-construction objects are separate blocks.** Both must be edited together when changing columns.
+6. **FMQ filters `Task Type = "Task"` only.** Subtasks and section rows are excluded by design. If FMQ output is missing a merchant, this filter is the first thing to check (the merchant might exist in the context file as a subtask row).
+7. **`Preview Date` blank for some rows in both PS and FMQ** is intentional. When `Preview Days` is 0 or unset in the context file, `Preview Date` outputs blank. `Due Date` is **not** blanked — it falls back to Live Date − 1. Don't treat a blank Preview Date as a bug — check that retailer's Preview Days value in the context file.
+8. **FMQ `FADMIN Merchant Page (url)` / `FTP Path (url)` are constructed from Merchant ID, not read from context.** They will be populated on every FMQ row even when the Merchant Information Database leaves those fields blank. This is intentional (round 2 feedback fix). Renaming those context columns does not affect FMQ output. PS mode still reads them from its context file.
+9. **PS `Task Name` may appear as `"Merchant - Merchant - Date"` for some retailers.** This is not a bug — for retailers like Haggen, the FAdmin `Flyer Run Name` field already includes the merchant name (e.g., `"Haggen - June-24"`). The tool concatenates `Merchant Name + " - " + Flyer Run Name` as designed.
 
 ---
 
@@ -183,10 +183,10 @@ Both context files have `Assets Check Days (short text)` and `Preview Days (shor
 | Output Field | Formula |
 |---|---|
 | Start Date | `Live Date − Assets Check Days` |
-| Preview Date | `Live Date − Preview Days` (FMQ: blank when Preview Days is 0/unset) |
-| Due Date | `Live Date − Preview Days − 1` (i.e., Preview Date − 1; when Preview Days is 0/unset this is Live Date − 1). **FMQ Due Date is never blank.** |
+| Preview Date | `Live Date − Preview Days` (both PS and FMQ: **blank when Preview Days is 0/unset**) |
+| Due Date | `Live Date − Preview Days − 1` (when Preview Days is 0/unset this is Live Date − 1). Due Date is **never blank** in either mode. |
 | Valid Date | FAdmin `Valid Date` column — passthrough only |
-| Live/Preview Date (FMQ) | FAdmin `Live Date` column — passthrough only |
+| Live Date (PS col 16, FMQ col 8) | FAdmin `Live Date` column — passthrough only |
 | End Date (FMQ) | FAdmin `End date` column — passthrough only |
 
 **Verified example:** Fresh Thyme Market — Preview Days=1, Live Date=Feb 3 → Preview Date=Feb 2, Due Date=Feb 1.
@@ -205,10 +205,7 @@ One context row per Flyer Type. If no match is found, the FAdmin row is skipped 
 
 Direct concatenation with ` - ` separator. No date parsing. The Flyer Run Name in the FAdmin export already contains the date range as a string (e.g., "Apr 10").
 
-### Processor Field
-The output column is `Processor (drop down)`. The source in the PS context file is `Coordinator (drop down)` — these are the same field with different names. The tool maps `Coordinator (drop down)` → `Processor (drop down)`.
-
-### Output — 19 Columns (exact order)
+### Output — 20 Columns (exact order)
 
 | # | Output Header | Source |
 |---|---|---|
@@ -216,21 +213,22 @@ The output column is `Processor (drop down)`. The source in the PS context file 
 | 2 | `Task Content` | PS Context `Task Content` (may contain retailer processing notes; leading/trailing newlines stripped) |
 | 3 | `Due Date` | Live Date − Preview Days − 1 → M/D/YYYY |
 | 4 | `Start Date` | Live Date − Assets Check Days → M/D/YYYY |
-| 5 | `Ext. Comms (drop down)` | PS Context `External Comms (Form Entry) (drop down)` |
-| 6 | `FADMIN Merchant Page (url)` | PS Context `FADMIN Merchant Page (url)` |
-| 7 | `FQC (drop down)` | PS Context `FQC (drop down)` |
-| 8 | `FTP Path (url)` | PS Context `FTP Path (url)` |
-| 9 | `Flyer Cadence (drop down)` | PS Context `Flyer Cadence (drop down)` |
-| 10 | `Flyer Review (drop down)` | PS Context `Flyer Review (drop down)` |
-| 11 | `Flyer Review Guide (url)` | PS Context `Flyer Review Guide (url)` |
-| 12 | `Flyer Run (url)` | `https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}` |
-| 13 | `Lead (drop down)` | PS Context `Lead (drop down)` |
-| 14 | `OneGuide (url)` | PS Context `OneGuide (url)` |
-| 15 | `Page Swaps & Revisions (drop down)` | PS Context `Page Swaps & Revisions (drop down)` |
-| 16 | `Preview Date` | Live Date − Preview Days → M/D/YYYY |
-| 17 | `Processor (drop down)` | PS Context `Coordinator (drop down)` |
-| 18 | `Upload (drop down)` | PS Context `Upload (drop down)` |
-| 19 | `Valid Date` | FAdmin `Valid Date` → M/D/YYYY (may differ from Live Date) |
+| 5 | `FADMIN Merchant Page (url)` | PS Context `FADMIN Merchant Page (url)` |
+| 6 | `FQC (drop down)` | PS Context `FQC (drop down)` |
+| 7 | `FTP Path (url)` | PS Context `FTP Path (url)` |
+| 8 | `Flyer Cadence (drop down)` | PS Context `Flyer Cadence (drop down)` |
+| 9 | `Flyer Review (drop down)` | PS Context `Flyer Review (drop down)` |
+| 10 | `Flyer Review Guide (url)` | PS Context `Flyer Review Guide (url)` |
+| 11 | `Flyer Run (url)` | `https://fadmin.flippback.com/flyer_runs/{Flyer Run ID}` |
+| 12 | `OneGuide (url)` | PS Context `OneGuide (url)` |
+| 13 | `Preview Date` | Live Date − Preview Days → M/D/YYYY; **blank if Preview Days is 0 or unset** |
+| 14 | `Upload (drop down)` | PS Context `Upload (drop down)` |
+| 15 | `Valid Date` | FAdmin `Valid Date` → M/D/YYYY (may differ from Live Date) |
+| 16 | `Live Date` | FAdmin `Live Date` → M/D/YYYY (passthrough) |
+| 17 | `Flyer Type ID` | FAdmin `Flyer Type ID` |
+| 18 | `Segment` | PS Context `Segment (drop down)` |
+| 19 | `Assets Check Days` | PS Context `Assets Check Days (short text)` (raw value) |
+| 20 | `Preview Days` | PS Context `Preview Days (short text)` (raw value) |
 
 ### Required Columns — PS Context File
 `Flyer Type ID (short text)`, `Preview Days (short text)`, `Assets Check Days (short text)`

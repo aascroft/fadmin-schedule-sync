@@ -571,7 +571,6 @@ const PS_HEADERS = [
   'Task Content',
   'Due Date',
   'Start Date',
-  'Ext. Comms (drop down)',
   'FADMIN Merchant Page (url)',
   'FQC (drop down)',
   'FTP Path (url)',
@@ -579,13 +578,15 @@ const PS_HEADERS = [
   'Flyer Review (drop down)',
   'Flyer Review Guide (url)',
   'Flyer Run (url)',
-  'Lead (drop down)',
   'OneGuide (url)',
-  'Page Swaps & Revisions (drop down)',
   'Preview Date',
-  'Processor (drop down)',
   'Upload (drop down)',
   'Valid Date',
+  'Live Date',
+  'Flyer Type ID',
+  'Segment',
+  'Assets Check Days',
+  'Preview Days',
 ];
 
 function transformPS(fadminRows, contextMap, dedupeSet) {
@@ -617,15 +618,14 @@ function transformPS(fadminRows, contextMap, dedupeSet) {
 
     if (!liveDate) { warnings.blankDate = (warnings.blankDate || 0) + 1; }
     const startDate = addDays(liveDate, -assetsDays);
-    const previewDate = addDays(liveDate, -previewDays);
-    const dueDate = addDays(previewDate, -1);
+    const previewDate = previewDays > 0 ? addDays(liveDate, -previewDays) : '';
+    const dueDate = addDays(liveDate, -(previewDays + 1));
 
     output.push({
       'Task Name': merchantName + ' - ' + flyerRunName,
       'Task Content': (ctx['Task Content'] || '').replace(/^\n+|\n+$/g, ''),
       'Due Date': dueDate,
       'Start Date': startDate,
-      'Ext. Comms (drop down)': ctx['External Comms (Form Entry) (drop down)'] || '',
       'FADMIN Merchant Page (url)': ctx['FADMIN Merchant Page (url)'] || '',
       'FQC (drop down)': ctx['FQC (drop down)'] || '',
       'FTP Path (url)': ctx['FTP Path (url)'] || '',
@@ -633,13 +633,15 @@ function transformPS(fadminRows, contextMap, dedupeSet) {
       'Flyer Review (drop down)': ctx['Flyer Review (drop down)'] || '',
       'Flyer Review Guide (url)': ctx['Flyer Review Guide (url)'] || '',
       'Flyer Run (url)': flyerRunUrl,
-      'Lead (drop down)': ctx['Lead (drop down)'] || '',
       'OneGuide (url)': ctx['OneGuide (url)'] || '',
-      'Page Swaps & Revisions (drop down)': ctx['Page Swaps & Revisions (drop down)'] || '',
       'Preview Date': previewDate,
-      'Processor (drop down)': ctx['Coordinator (drop down)'] || '',
       'Upload (drop down)': ctx['Upload (drop down)'] || '',
       'Valid Date': normDate(validDate),
+      'Live Date': normDate(liveDate),
+      'Flyer Type ID': flyerTypeId,
+      'Segment': ctx['Segment (drop down)'] || '',
+      'Assets Check Days': ctx['Assets Check Days (short text)'] || '',
+      'Preview Days': ctx['Preview Days (short text)'] || '',
     });
   }
 
