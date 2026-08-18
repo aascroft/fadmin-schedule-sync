@@ -672,6 +672,7 @@ const FMQ_HEADERS = [
   'Category (drop down)',
   'FADMIN Merchant Page (url)',
   'FTP Path (url)',
+  'Work Routing',
 ];
 
 function transformFMQ(fadminRows, contextMap, dedupeSet) {
@@ -733,6 +734,7 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
       'Category (drop down)': ctx['Category (drop down)'] || '',
       'FADMIN Merchant Page (url)': merchantId ? 'https://fadmin.flippback.com/merchants/' + merchantId + '/dashboard' : '',
       'FTP Path (url)': merchantId ? 'https://fadmin.flippback.com/merchants/' + merchantId + '/ftp_files' : '',
+      'Work Routing': ctx['Work Routing (labels)'] || '',
     });
   }
 
