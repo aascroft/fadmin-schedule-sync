@@ -11,22 +11,22 @@
   :root {
     --accent:#4361ee; --accent-dark:#3451d1; --accent-tint:#f0f3ff;
     --success:#2dc653; --success-dark:#22a846; --success-tint:#f0fdf4;
-    --on-accent:#fff; --highlight:#4361ee;
+    --on-accent:#fff; --highlight:#4361ee; --page-bg:#f7f8fa;
   }
   body[data-theme="ps"] {
     --accent:#7232fd; --accent-dark:#5a1fd4; --accent-tint:#f3ecff;
     --success:#02d871; --success-dark:#02b85f; --success-tint:#e6fbf0;
-    --on-accent:#ffffff; --highlight:#ff914d;
+    --on-accent:#ffffff; --highlight:#ff914d; --page-bg:#e0d1ff;
   }
   body[data-theme="fmq"] {
     --accent:#ff914d; --accent-dark:#e67a37; --accent-tint:#fff1e8;
     --success:#19add4; --success-dark:#1494b6; --success-tint:#e7f7fc;
-    --on-accent:#ffffff; --highlight:#19add4;
+    --on-accent:#ffffff; --highlight:#19add4; --page-bg:#c7ecf5;
   }
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #f7f8fa;
+    background: var(--page-bg);
     color: #1a1a2e;
     min-height: 100vh;
   }
