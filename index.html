@@ -8,9 +8,25 @@
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+  :root {
+    --accent:#4361ee; --accent-dark:#3451d1; --accent-tint:#f0f3ff;
+    --success:#2dc653; --success-dark:#22a846; --success-tint:#f0fdf4;
+    --on-accent:#fff; --highlight:#4361ee; --page-bg:#f7f8fa;
+  }
+  body[data-theme="ps"] {
+    --accent:#7232fd; --accent-dark:#5a1fd4; --accent-tint:#f3ecff;
+    --success:#02d871; --success-dark:#02b85f; --success-tint:#e6fbf0;
+    --on-accent:#ffffff; --highlight:#ff914d; --page-bg:#e0d1ff;
+  }
+  body[data-theme="fmq"] {
+    --accent:#82e069; --accent-dark:#6fbe59; --accent-tint:#ecfae2;
+    --success:#19add4; --success-dark:#1494b6; --success-tint:#e7f7fc;
+    --on-accent:#1a1a2e; --highlight:#19add4; --page-bg:#c7ecf5;
+  }
+
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: #f7f8fa;
+    background: var(--page-bg);
     color: #1a1a2e;
     min-height: 100vh;
   }
@@ -61,16 +77,22 @@
     padding: 16px 20px;
     cursor: pointer;
     background: #fff;
-    text-align: left;
     transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
   }
-  .mode-btn:hover { border-color: #4361ee; }
+  .mode-btn:hover { border-color: var(--accent); }
   .mode-btn.selected {
-    border-color: #4361ee;
-    background: #f0f3ff;
+    border-color: var(--accent);
+    background: var(--accent-tint);
+    box-shadow: inset 0 -4px 0 var(--highlight);
   }
+  .mode-logo { width: 72px; height: 72px; object-fit: contain; border-radius: 12px; }
   .mode-btn .mode-name { font-weight: 700; font-size: 15px; color: #1a1a2e; }
-  .mode-btn .mode-desc { font-size: 12px; color: #6c757d; margin-top: 4px; }
+  .mode-btn .mode-desc { font-size: 12px; color: #6c757d; }
 
   /* Upload zones */
   .uploads { display: flex; flex-direction: column; gap: 14px; }
@@ -86,8 +108,8 @@
     transition: border-color 0.15s, background 0.15s;
     position: relative;
   }
-  .drop-zone:hover, .drop-zone.drag-over { border-color: #4361ee; background: #f0f3ff; }
-  .drop-zone.has-file { border-color: #2dc653; background: #f0fdf4; border-style: solid; }
+  .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--accent-tint); }
+  .drop-zone.has-file { border-color: var(--success); background: var(--success-tint); border-style: solid; }
   .drop-zone input[type=file] {
     position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
   }
@@ -98,8 +120,8 @@
   /* Process button */
   .process-wrap { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
   .btn-process {
-    background: #4361ee;
-    color: #fff;
+    background: var(--accent);
+    color: var(--on-accent);
     border: none;
     border-radius: 8px;
     padding: 13px 28px;
@@ -108,12 +130,12 @@
     cursor: pointer;
     transition: background 0.15s;
   }
-  .btn-process:hover:not(:disabled) { background: #3451d1; }
+  .btn-process:hover:not(:disabled) { background: var(--accent-dark); }
   .btn-process:disabled { background: #b0bec5; cursor: not-allowed; }
 
   .btn-download {
-    background: #2dc653;
-    color: #fff;
+    background: var(--success);
+    color: var(--on-accent);
     border: none;
     border-radius: 8px;
     padding: 13px 28px;
@@ -123,7 +145,7 @@
     transition: background 0.15s;
     display: none;
   }
-  .btn-download:hover { background: #22a846; }
+  .btn-download:hover { background: var(--success-dark); }
   .btn-download.visible { display: inline-block; }
 
   /* Status area */
@@ -149,11 +171,11 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
-    color: #4361ee;
+    color: var(--accent);
     user-select: none;
     padding: 4px 0;
   }
-  summary:hover { color: #3451d1; }
+  summary:hover { color: var(--accent-dark); }
   .instructions-tabs { display: flex; gap: 0; border-bottom: 2px solid #e2e6ea; margin: 16px 0 18px; }
   .tab-btn {
     background: none;
@@ -167,7 +189,7 @@
     margin-bottom: -2px;
     transition: color 0.1s;
   }
-  .tab-btn.active { color: #4361ee; border-bottom-color: #4361ee; }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
   .tab-content { display: none; }
   .tab-content.active { display: block; }
   .instructions-body { font-size: 13px; line-height: 1.75; color: #374151; }
@@ -180,12 +202,12 @@
     font-size: 12px; font-family: 'SF Mono', monospace;
   }
   .instructions-body .note {
-    background: #f0f3ff; border-left: 3px solid #4361ee;
+    background: var(--accent-tint); border-left: 3px solid var(--accent);
     padding: 10px 14px; border-radius: 0 6px 6px 0; margin: 10px 0;
     font-size: 12px;
   }
-  .instructions-body a { color: #4361ee; word-break: break-all; }
-  .instructions-body a:hover { color: #3451d1; }
+  .instructions-body a { color: var(--accent); word-break: break-all; }
+  .instructions-body a:hover { color: var(--accent-dark); }
   .instructions-body p { margin-bottom: 6px; }
 
   @media (max-width: 600px) {
@@ -212,10 +234,12 @@
     <div class="section-label">Step 1 — Select import type</div>
     <div class="mode-grid">
       <button class="mode-btn" id="mode-ps" onclick="selectMode('ps')">
+        <img class="mode-logo" alt="Processing Support logo" src="assets/logo-ps.png">
         <div class="mode-name">Processing Support</div>
         <div class="mode-desc">Import into the PS Board workflow</div>
       </button>
       <button class="mode-btn" id="mode-fmq" onclick="selectMode('fmq')">
+        <img class="mode-logo" alt="Flyer Management Queue logo" src="assets/logo-fmq.png">
         <div class="mode-name">Flyer Management Queue</div>
         <div class="mode-desc">Import into the FMQ workflow</div>
       </button>
@@ -414,6 +438,7 @@ const state = {
 // ─── Mode selector ────────────────────────────────────────────────────────────
 function selectMode(mode) {
   state.mode = mode;
+  document.body.dataset.theme = mode;   // 'ps' or 'fmq'
   document.getElementById('mode-ps').classList.toggle('selected', mode === 'ps');
   document.getElementById('mode-fmq').classList.toggle('selected', mode === 'fmq');
 
