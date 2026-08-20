@@ -612,6 +612,8 @@ const PS_HEADERS = [
   'Segment',
   'Assets Check Days',
   'Preview Days',
+  'Import Coord.',
+  'Import Lead',
 ];
 
 function transformPS(fadminRows, contextMap, dedupeSet) {
@@ -667,6 +669,8 @@ function transformPS(fadminRows, contextMap, dedupeSet) {
       'Segment': ctx['Segment (drop down)'] || '',
       'Assets Check Days': ctx['Assets Check Days (short text)'] || '',
       'Preview Days': ctx['Preview Days (short text)'] || '',
+      'Import Coord.': ctx['Coordinator (users)'] || '',
+      'Import Lead': ctx['Lead (users)'] || '',
     });
   }
 
