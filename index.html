@@ -702,6 +702,9 @@ const FMQ_HEADERS = [
   'FADMIN Merchant Page (url)',
   'FTP Path (url)',
   'Work Routing',
+  'Import Coord.',
+  'Import Lead',
+  'Import PAF',
 ];
 
 function transformFMQ(fadminRows, contextMap, dedupeSet) {
@@ -764,6 +767,9 @@ function transformFMQ(fadminRows, contextMap, dedupeSet) {
       'FADMIN Merchant Page (url)': merchantId ? 'https://fadmin.flippback.com/merchants/' + merchantId + '/dashboard' : '',
       'FTP Path (url)': merchantId ? 'https://fadmin.flippback.com/merchants/' + merchantId + '/ftp_files' : '',
       'Work Routing': ctx['Work Routing (labels)'] || '',
+      'Import Coord.': ctx['Coordinator (users)'] || '',
+      'Import Lead': ctx['Lead (users)'] || '',
+      'Import PAF': ctx['Pre-Assignees (users)'] || '',
     });
   }
 
