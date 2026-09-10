@@ -544,6 +544,16 @@ function normDate(dateStr) {
   return (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear();
 }
 
+// Strip ClickUp tag brackets to plain text; comma-separate multiples.
+// [fr only] -> "fr only"; [a][b] -> "a, b"; [a, b] -> "a, b"; empty -> "".
+function normTags(v) {
+  if (!v) return '';
+  return String(v)
+    .replace(/\]\s*\[/g, ', ')   // [a][b] boundary -> comma
+    .replace(/[\[\]]/g, '')       // strip remaining brackets
+    .split(',').map(s => s.trim()).filter(Boolean).join(', ');
+}
+
 
 // ─── Dedupe set ───────────────────────────────────────────────────────────────
 function buildDedupeSet(rows) {
@@ -614,6 +624,7 @@ const PS_HEADERS = [
   'Preview Days',
   'Import Coord.',
   'Import Lead',
+  'tags',
 ];
 
 function transformPS(fadminRows, contextMap, dedupeSet) {
@@ -671,6 +682,7 @@ function transformPS(fadminRows, contextMap, dedupeSet) {
       'Preview Days': ctx['Preview Days (short text)'] || '',
       'Import Coord.': ctx['Coordinator (users)'] || '',
       'Import Lead': ctx['Lead (users)'] || '',
+      'tags': normTags(ctx['tags']),
     });
   }
 
